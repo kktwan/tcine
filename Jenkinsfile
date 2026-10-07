@@ -6,6 +6,11 @@ pipeline {
     }
 
     parameters {
+        choice(
+            name: 'GIT_BRANCH',
+            choices: ['prod', 'main'],
+            description: '배포할 Git 브랜치 선택 (기본: prod 운영 브랜치)'
+        )
         booleanParam(
             name: 'ROLLBACK',
             defaultValue: false,
@@ -20,6 +25,7 @@ pipeline {
 
     environment {
         SERVICE_NAME    = "tcine"
+        GIT_REPO_URL    = "https://github.com/kktwan/tcine.git"
         DEPLOY_DIR      = "/data/tcine"
         NGINX_CONTAINER = "tcine-nginx"
     }
@@ -38,7 +44,6 @@ pipeline {
                 script {
                     def targetTag = params.ROLLBACK_TAG?.trim()
                     if (!targetTag) {
-                        // 비워둔 경우 현재 떠 있는 이미지 바로 직전의 prod-* 태그를 자동 선택
                         targetTag = sh(
                             script: "docker images ${SERVICE_NAME} --format '{{.Tag}}' | grep '^prod-' | sort -t'-' -k2 -nr | sed -n '2p'",
                             returnStdout: true
@@ -57,10 +62,12 @@ pipeline {
         stage('🔍 Checkout') {
             when { expression { !params.ROLLBACK } }
             steps {
-                checkout scm
                 script {
+                    def targetBranch = params.GIT_BRANCH ?: 'prod'
+                    echo "🔍 Git Checkout: ${GIT_REPO_URL} (branch: ${targetBranch})"
+                    git branch: targetBranch, url: "${GIT_REPO_URL}"
                     env.GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    echo "✅ Git Commit: ${env.GIT_COMMIT_SHORT}"
+                    echo "✅ Branch: ${targetBranch} | Commit: ${env.GIT_COMMIT_SHORT}"
                 }
             }
         }
@@ -159,7 +166,7 @@ pipeline {
 
     post {
         success {
-            echo "🎉 ${SERVICE_NAME} 무중단 배포 성공 | Image: ${SERVICE_NAME}:${env.DOCKER_TAG}"
+            echo "🎉 ${SERVICE_NAME} 무중단 배포 성공 | Branch: ${params.GIT_BRANCH ?: 'prod'} | Image: ${SERVICE_NAME}:${env.DOCKER_TAG}"
         }
         failure {
             echo "❌ ${SERVICE_NAME} 배포 실패"
