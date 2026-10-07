@@ -12,10 +12,8 @@ spring:
         api-key: ${GEMINI_API_KEY:not-configured}
         chat:
           model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
-          # 생각하는 시간을 0으로 줄여 응답 지연(TTFT)을 최소화한다
+          # 생각하는 시간을 줄여 응답을 빠르게 한다 (MINIMAL < LOW < MEDIUM < HIGH)
           thinking-level: ${GEMINI_THINKING_LEVEL:MINIMAL}
-          thinking-budget: 0
-          include-thoughts: false
           temperature: 0.3
           options:
             temperature: 0.3

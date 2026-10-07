@@ -73,8 +73,9 @@ public class TvRecommendService {
               3) 기준 작품이 실사 드라마/예능이고 사용자가 애니메이션을 요청하지 않았다면, 후보에 애니메이션이 섞여 있더라도 실사 시리즈를 우선 선정한다. (반대로 기준 작품이 애니메이션이면 애니메이션 우선)
             - (유형 B: 분위기·소재·상황·장르 기반 취향 요청)
               1) 사용자가 원하는 핵심 정서, 소재, 정주행 상황에 부합하는 작품들을 최대 18편까지 엄선한다.
+              2) 사용자가 특정 장르(예: 로맨스, 코미디, 스릴러, 미스터리, 범죄, 판타지 등)나 분위기(예: 달달한, 설레는, 힐링)를 명시했다면, 반드시 해당 장르/분위기에 부합하는 작품만 고르고 상충하는 장르(예: 달달한 로맨스 요청에 전쟁·범죄물)는 제외한다.
             - (유형 C: 특정 작가/연출·배우·방송사/OTT 탐색 요청)
-              1) 후보 목록에 있는 해당 조건의 작품을 누락 없이 모두 picks에 담는다 (최대 18편).
+              1) 후보 목록에 있는 해당 조건(예: 쿠팡플레이, 넷플릭스, 디즈니+, 티빙, 웨이브, 애플티비, tvN, JTBC 등)의 작품을 누락 없이 모두 picks에 담는다 (최대 18편). 다른 방송사/OTT 전용 작품은 섞지 않는다.
             - (시대성·대중성·완성도 공통 기준)
               1) 사용자가 '고전', '옛날 드라마', '90년대'를 명시하지 않은 이상, 지나치게 오래된 작품보다 최근 방영작 및 평점과 대중성이 검증된 웰메이드 시리즈를 우선 선정한다.
 
@@ -93,7 +94,14 @@ public class TvRecommendService {
             "드라마", "시리즈", "예능", "애니", "애니메이션", "작품", "전부", "전체", "모두", "정주행", "모음",
             "감독", "작가", "연출", "제작", "배우", "출연", "주연", "나오는", "나온", "출연한",
             "추천", "추천해줘", "알려줘", "찾아줘", "볼만한", "재밌는", "재미있는", "좋은", "최고의",
+            "인기", "인기있는", "유명한", "최신", "신작", "요즘", "순", "순위", "리스트", "목록", "오리지널", "독점", "방영",
             "비슷한", "유사한", "같은", "닮은", "느낌", "느낌의", "스타일", "스타일의", "분위기", "분위기의"
+    );
+
+    /** 조사 제거 시 마지막 글자('이', '리', '지', '디', '로', '비' 등)가 잘리면 안 되는 외래어·OTT·장르 접미사 */
+    private static final List<String> PROTECTED_WORD_SUFFIXES = List.of(
+            "플레이", "스토리", "미스터리", "판타지", "코미디", "패밀리", "다큐멘터리", "하모니", "심포니",
+            "데이", "보이", "토이", "조이", "에세이", "멜로", "솔로", "히어로", "티비", "비디오"
     );
 
     private static final int CANDIDATES = 24;
@@ -301,11 +309,27 @@ public class TvRecommendService {
         };
     }
 
+    /**
+     * "쿠팡 플레이" -> "쿠팡플레이", "디즈니 플러스" -> "디즈니플러스" 등 띄어쓰기된 OTT 명칭을 정규화한다.
+     */
+    private static String normalizeOttSpacing(String query) {
+        if (query == null || query.isEmpty()) {
+            return "";
+        }
+        return query
+                .replaceAll("(?i)쿠팡\\s+플레이", "쿠팡플레이")
+                .replaceAll("(?i)디즈니\\s*(\\+|플러스)", "디즈니플러스")
+                .replaceAll("(?i)애플\\s*(tv\\+?|티비\\+?)", "애플티비")
+                .replaceAll("(?i)아마존\\s+프라임(\\s+비디오)?", "아마존프라임")
+                .replaceAll("(?i)프라임\\s+비디오", "프라임비디오");
+    }
+
     private static List<String> extractCoreTerms(String query) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
-        String[] rawTokens = query.toLowerCase(Locale.ROOT).split("\\s+");
+        String normalizedQuery = normalizeOttSpacing(query);
+        String[] rawTokens = normalizedQuery.toLowerCase(Locale.ROOT).split("\\s+");
         List<String> core = new ArrayList<>();
         for (String raw : rawTokens) {
             String c = compact(raw);
@@ -318,7 +342,7 @@ public class TvRecommendService {
             }
         }
         if (core.isEmpty()) {
-            String fallback = compact(query);
+            String fallback = compact(normalizedQuery);
             return fallback.isEmpty() ? List.of() : List.of(fallback);
         }
         return core;
@@ -328,8 +352,84 @@ public class TvRecommendService {
         if (token.length() <= 2) {
             return token;
         }
+        for (String suffix : PROTECTED_WORD_SUFFIXES) {
+            if (token.endsWith(suffix)) {
+                return token;
+            }
+        }
         String stripped = token.replaceFirst("(이랑|으로|에서|하고| 같은|같은|은|는|이|가|을|를|의|에|로|와|과|랑|도|만)$", "");
         return stripped.length() >= 2 ? stripped : token;
+    }
+
+    /**
+     * 띄어쓰기 여부와 무관하게 검색어에 명시된 OTT/방송사 조건을 추출한다.
+     * 예: "쿠팡 플레이 인기 시리즈", "쿠팡플레이 인기 시리즈" -> ["coupang"]
+     */
+    private static Set<String> extractRequestedNetworks(String query) {
+        if (query == null || query.isBlank()) {
+            return Set.of();
+        }
+        String c = compact(query);
+        Set<String> nets = new HashSet<>();
+        if (c.contains("쿠팡") || c.contains("coupang")) {
+            nets.add("coupang");
+        }
+        if (c.contains("넷플릭스") || c.contains("넷플") || c.contains("netflix")) {
+            nets.add("netflix");
+        }
+        if (c.contains("디즈니") || c.contains("disney")) {
+            nets.add("disney");
+        }
+        if (c.contains("애플티비") || c.contains("애플tv") || c.contains("appletv")) {
+            nets.add("apple");
+        }
+        if (c.contains("티빙") || c.contains("tving")) {
+            nets.add("tving");
+        }
+        if (c.contains("웨이브") || c.contains("wavve")) {
+            nets.add("wavve");
+        }
+        if (c.contains("왓챠") || c.contains("watcha")) {
+            nets.add("watcha");
+        }
+        if (c.contains("티비엔") || c.contains("tvn")) {
+            nets.add("tvn");
+        }
+        if (c.contains("제이티비씨") || c.contains("jtbc")) {
+            nets.add("jtbc");
+        }
+        if (c.contains("에스비에스") || c.contains("sbs")) {
+            nets.add("sbs");
+        }
+        if (c.contains("케이비에스") || c.contains("kbs")) {
+            nets.add("kbs");
+        }
+        if (c.contains("엠비씨") || c.contains("mbc")) {
+            nets.add("mbc");
+        }
+        if (c.contains("ena")) {
+            nets.add("ena");
+        }
+        if (c.contains("오씨엔") || c.contains("ocn")) {
+            nets.add("ocn");
+        }
+        return nets;
+    }
+
+    private static boolean matchesRequestedNetworks(Document doc, Set<String> requestedNetworks) {
+        if (requestedNetworks.isEmpty()) {
+            return true;
+        }
+        String networksCompact = compact(str(doc.getMetadata().get("networks")));
+        if (networksCompact.isEmpty()) {
+            return false;
+        }
+        for (String net : requestedNetworks) {
+            if (networkMatches(networksCompact, net)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean networkMatches(String networksCompact, String term) {
@@ -339,21 +439,127 @@ public class TvRecommendService {
         if (networksCompact.contains(term)) {
             return true;
         }
-        return switch (term) {
-            case "넷플릭스" -> networksCompact.contains("netflix");
-            case "디즈니", "디즈니플러스" -> networksCompact.contains("disney");
-            case "애플", "애플티비" -> networksCompact.contains("apple");
-            case "티빙" -> networksCompact.contains("tving");
-            case "웨이브" -> networksCompact.contains("wavve");
-            case "쿠팡", "쿠팡플레이" -> networksCompact.contains("coupang");
-            default -> false;
-        };
+        if (term.contains("넷플") || term.contains("netflix")) {
+            return networksCompact.contains("netflix") || networksCompact.contains("넷플릭스");
+        }
+        if (term.contains("디즈니") || term.contains("disney")) {
+            return networksCompact.contains("disney") || networksCompact.contains("디즈니");
+        }
+        if (term.contains("애플") || term.contains("apple")) {
+            return networksCompact.contains("apple") || networksCompact.contains("애플");
+        }
+        if (term.contains("티빙") || term.contains("tving")) {
+            return networksCompact.contains("tving") || networksCompact.contains("티빙");
+        }
+        if (term.contains("웨이브") || term.contains("wavve")) {
+            return networksCompact.contains("wavve") || networksCompact.contains("웨이브");
+        }
+        if (term.contains("쿠팡") || term.contains("coupang")) {
+            return networksCompact.contains("coupang") || networksCompact.contains("쿠팡");
+        }
+        if (term.contains("왓챠") || term.contains("watcha")) {
+            return networksCompact.contains("watcha") || networksCompact.contains("왓챠");
+        }
+        if (term.contains("티비엔") || term.contains("tvn")) {
+            return networksCompact.contains("tvn");
+        }
+        if (term.contains("제이티비씨") || term.contains("jtbc")) {
+            return networksCompact.contains("jtbc");
+        }
+        return false;
+    }
+
+    private static Set<String> extractRequestedGenres(String query) {
+        if (query == null || query.isBlank()) {
+            return Set.of();
+        }
+        String c = compact(query);
+        Set<String> genres = new HashSet<>();
+        if (c.contains("로맨스") || c.contains("멜로") || c.contains("로코") || c.contains("로맨틱")
+                || c.contains("달달한") || c.contains("설레는") || c.contains("첫사랑") || c.contains("연애")) {
+            genres.add("로맨스");
+        }
+        if (c.contains("스릴러") || c.contains("서스펜스") || c.contains("공포") || c.contains("호러") || c.contains("무서운")) {
+            genres.add("미스터리");
+            genres.add("범죄");
+        }
+        if (c.contains("코미디") || c.contains("웃긴") || c.contains("유쾌한") || c.contains("시트콤")) {
+            genres.add("코미디");
+        }
+        if (c.contains("액션") || c.contains("격투") || c.contains("첩보")) {
+            genres.add("action");
+            genres.add("액션");
+        }
+        if (c.contains("sf") || c.contains("공상과학") || c.contains("판타지") || c.contains("마법") || c.contains("타임루프")) {
+            genres.add("scifi");
+            genres.add("fantasy");
+            genres.add("판타지");
+            genres.add("sf");
+        }
+        if (c.contains("범죄") || c.contains("수사") || c.contains("형사") || c.contains("추리")) {
+            genres.add("범죄");
+            genres.add("미스터리");
+        }
+        if (c.contains("애니") || c.contains("만화")) {
+            genres.add("애니메이션");
+        }
+        if (c.contains("예능") || c.contains("리얼리티") || c.contains("토크쇼")) {
+            genres.add("reality");
+            genres.add("talk");
+            genres.add("예능");
+        }
+        if (c.contains("가족") || c.contains("어린이")) {
+            genres.add("가족");
+        }
+        if (c.contains("다큐")) {
+            genres.add("다큐멘터리");
+        }
+        return genres;
+    }
+
+    private static boolean matchesRequestedGenres(Document doc, Set<String> requestedGenres) {
+        if (requestedGenres.isEmpty()) {
+            return true;
+        }
+        Map<String, Object> m = doc.getMetadata();
+        String candGenres = compact(str(m.get("genres")));
+        String candKeywords = compact(str(m.getOrDefault("keywords", extractFieldFromContent(doc.getText(), "키워드:"))));
+        for (String req : requestedGenres) {
+            if (candGenres.contains(req) || candKeywords.contains(req)) {
+                return true;
+            }
+            if ("로맨스".equals(req) && (candKeywords.contains("사랑") || candKeywords.contains("연애")
+                    || candKeywords.contains("멜로") || candKeywords.contains("로맨틱") || candKeywords.contains("달달"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasConflictingGenre(Document doc, String query, Set<String> requestedGenres) {
+        if (query == null || query.isBlank()) {
+            return false;
+        }
+        String q = compact(query);
+        String candGenres = compact(str(doc.getMetadata().get("genres")));
+        boolean wantsLightOrRomantic = requestedGenres.contains("로맨스") || requestedGenres.contains("가족")
+                || q.contains("달달") || q.contains("설레") || q.contains("힐링") || q.contains("따뜻");
+        if (wantsLightOrRomantic) {
+            if (candGenres.contains("war") || candGenres.contains("전쟁")) {
+                return true;
+            }
+            if (!requestedGenres.contains("범죄") && !requestedGenres.contains("미스터리") && candGenres.contains("범죄")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int keywordScore(Document document, String query) {
         Map<String, Object> metadata = document.getMetadata();
         List<String> terms = extractCoreTerms(query);
-        if (terms.isEmpty()) {
+        Set<String> requestedNetworks = extractRequestedNetworks(query);
+        if (terms.isEmpty() && requestedNetworks.isEmpty()) {
             return 0;
         }
         String fullCore = String.join("", terms);
@@ -368,6 +574,10 @@ public class TvRecommendService {
 
         int totalScore = 0;
 
+        if (!requestedNetworks.isEmpty() && matchesRequestedNetworks(document, requestedNetworks)) {
+            totalScore = Math.max(totalScore, 85);
+        }
+
         if (fullCore.length() >= 2) {
             if (title.equals(fullCore) || originalTitle.equals(fullCore)) {
                 totalScore = Math.max(totalScore, 100);
@@ -378,7 +588,7 @@ public class TvRecommendService {
             } else if (creator.contains(fullCore)) {
                 totalScore = Math.max(totalScore, 80);
             } else if (cast.contains(fullCore) || networkMatches(networks, fullCore)) {
-                totalScore = Math.max(totalScore, 70);
+                totalScore = Math.max(totalScore, 75);
             } else if (keywords.contains(fullCore)) {
                 totalScore = Math.max(totalScore, 55);
             }
@@ -398,7 +608,7 @@ public class TvRecommendService {
             } else if (creator.contains(term)) {
                 termScore = 80;
             } else if (cast.contains(term) || networkMatches(networks, term)) {
-                termScore = 70;
+                termScore = 75;
             } else if (title.contains(term) || originalTitle.contains(term)) {
                 termScore = 65;
             } else if (keywords.contains(term)) {
@@ -429,7 +639,8 @@ public class TvRecommendService {
         if (q.isEmpty()) {
             return TvResult.empty(null);
         }
-        return run(username, q.toLowerCase(), q, q, 0);
+        String cacheKey = compact(q).isEmpty() ? q.toLowerCase(Locale.ROOT) : compact(q);
+        return run(username, cacheKey, q, q, 0);
     }
 
     private static String similarTargetTitle(String query) {
@@ -626,8 +837,23 @@ public class TvRecommendService {
 
         final Document refForRank = referenceDoc;
         final String queryForRank = requestText;
+        final Set<String> requestedNetworks = refForRank == null ? extractRequestedNetworks(queryForRank) : Set.of();
+        final Set<String> requestedGenres = refForRank == null ? extractRequestedGenres(queryForRank) : Set.of();
         List<Document> ranked = new ArrayList<>(docs);
-        ranked.sort(Comparator.comparingDouble((Document d) -> -boostedScore(d, queryForRank, refForRank)));
+        ranked.sort(Comparator.comparingDouble((Document d) -> -boostedScore(d, queryForRank, refForRank, requestedNetworks, requestedGenres)));
+
+        long strictNetworkMatches = ranked.stream()
+                .filter(d -> matchesRequestedNetworks(d, requestedNetworks))
+                .count();
+        boolean enforceNetworkFilter = !requestedNetworks.isEmpty() && strictNetworkMatches >= 1;
+
+        long strictGenreMatches = ranked.stream()
+                .filter(d -> (!enforceNetworkFilter || matchesRequestedNetworks(d, requestedNetworks))
+                        && matchesRequestedGenres(d, requestedGenres)
+                        && !hasConflictingGenre(d, queryForRank, requestedGenres))
+                .count();
+        boolean enforceGenreFilter = !requestedGenres.isEmpty() && strictGenreMatches >= 4;
+
         Map<Integer, Document> byId = new LinkedHashMap<>();
         for (Document doc : ranked) {
             int id = intOf(doc.getMetadata().get("tmdbId"));
@@ -640,6 +866,15 @@ public class TvRecommendService {
                 if (titleCompact.contains(excludeTitleCompact) || origCompact.contains(excludeTitleCompact)) {
                     continue;
                 }
+            }
+            if (enforceNetworkFilter && !matchesRequestedNetworks(doc, requestedNetworks)) {
+                continue;
+            }
+            if (refForRank == null && hasConflictingGenre(doc, queryForRank, requestedGenres)) {
+                continue;
+            }
+            if (enforceGenreFilter && !matchesRequestedGenres(doc, requestedGenres)) {
+                continue;
             }
             byId.putIfAbsent(id, doc);
         }
@@ -690,7 +925,8 @@ public class TvRecommendService {
         }
     }
 
-    private static double boostedScore(Document d, String query, Document refDoc) {
+    private static double boostedScore(Document d, String query, Document refDoc,
+                                       Set<String> requestedNetworks, Set<String> requestedGenres) {
         Map<String, Object> m = d.getMetadata();
         double rrfPart = m.containsKey("hybrid_score") ? doubleOf(m.get("hybrid_score")) * 25.0 : 0.0;
         double vecPart = m.containsKey("vector_score")
@@ -755,8 +991,27 @@ public class TvRecommendService {
                 long sharedKw = candKwSet.stream().filter(refKwSet::contains).count();
                 alignmentBonus += Math.min(0.20, sharedKw * 0.07);
             }
-        } else if (!queryWantsAnimation && candIsAnimation && query != null && !query.contains("가족") && !query.contains("어린이")) {
-            alignmentBonus -= 0.08;
+        } else {
+            if (!queryWantsAnimation && candIsAnimation && query != null && !query.contains("가족") && !query.contains("어린이")) {
+                alignmentBonus -= 0.08;
+            }
+            if (!requestedNetworks.isEmpty()) {
+                if (matchesRequestedNetworks(d, requestedNetworks)) {
+                    alignmentBonus += 0.65;
+                } else {
+                    alignmentBonus -= 0.85;
+                }
+            }
+            if (!requestedGenres.isEmpty()) {
+                if (matchesRequestedGenres(d, requestedGenres)) {
+                    alignmentBonus += 0.45;
+                } else {
+                    alignmentBonus -= 0.65;
+                }
+            }
+            if (hasConflictingGenre(d, query, requestedGenres)) {
+                alignmentBonus -= 0.75;
+            }
         }
 
         return similarity + recencyBonus + ratingBonus + alignmentBonus;

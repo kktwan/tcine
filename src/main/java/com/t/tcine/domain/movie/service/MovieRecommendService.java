@@ -73,6 +73,7 @@ public class MovieRecommendService {
               3) 기준 작품이 실사 영화(Live-action)이고 사용자가 애니메이션을 요청하지 않았다면, 후보에 아동용/가족 애니메이션이 섞여 있더라도 실사 영화를 우선 선정한다. (반대로 기준 작품이 애니메이션이면 애니메이션 우선)
             - (유형 B: 분위기·소재·상황·장르 기반 취향 요청)
               1) 사용자가 원하는 핵심 정서, 배경/소재, 관람 상황에 부합하는 작품들을 최대 18편까지 엄선한다.
+              2) 사용자가 특정 장르(예: 로맨스, 코미디, 공포, 스릴러, 액션, SF, 판타지 등)나 분위기(예: 달달한, 설레는, 힐링)를 명시했다면, 반드시 해당 장르가 실제 포함된 작품만 고르고 분위기가 상충하는 장르(예: 달달한 로맨스 요청에 전쟁·공포·범죄물)는 절대 포함하지 않는다.
             - (유형 C: 특정 감독·배우·시리즈·프랜차이즈 탐색 요청)
               1) 후보 목록에 있는 해당 인물/시리즈 조건의 작품을 누락 없이 모두 picks에 담는다 (최대 18편).
             - (시대성·대중성·완성도 공통 기준)
@@ -96,7 +97,14 @@ public class MovieRecommendService {
             "영화", "작품", "시리즈", "전부", "전체", "모두", "정주행", "몇편", "모음",
             "감독", "배우", "출연", "주연", "연출", "나오는", "나온", "출연한", "찍은",
             "추천", "추천해줘", "알려줘", "찾아줘", "볼만한", "재밌는", "재미있는", "좋은", "최고의",
+            "인기", "인기있는", "유명한", "최신", "신작", "요즘", "순", "순위", "리스트", "목록",
             "비슷한", "유사한", "같은", "닮은", "느낌", "느낌의", "스타일", "스타일의", "분위기", "분위기의"
+    );
+
+    /** 조사 제거 시 마지막 글자('이', '리', '지', '디', '로' 등)가 잘리면 안 되는 외래어·장르 접미사 */
+    private static final List<String> PROTECTED_WORD_SUFFIXES = List.of(
+            "플레이", "스토리", "미스터리", "판타지", "코미디", "패밀리", "다큐멘터리", "하모니", "심포니",
+            "데이", "보이", "토이", "조이", "에세이", "멜로", "솔로", "히어로"
     );
 
     /** AI에게 전달할 정제된 후보 수 */
@@ -345,8 +353,116 @@ public class MovieRecommendService {
         if (token.length() <= 2) {
             return token;
         }
+        for (String suffix : PROTECTED_WORD_SUFFIXES) {
+            if (token.endsWith(suffix)) {
+                return token;
+            }
+        }
         String stripped = token.replaceFirst("(이랑|으로|에서|하고| 같은|같은|은|는|이|가|을|를|의|에|로|와|과|랑|도|만)$", "");
         return stripped.length() >= 2 ? stripped : token;
+    }
+
+    /**
+     * 사용자의 자연어 검색어에 명시된 장르 조건을 추출한다.
+     * 예: "달달한 로맨스 영화 추천" -> ["로맨스"], "무서운 공포 스릴러" -> ["공포", "스릴러"]
+     */
+    private static Set<String> extractRequestedGenres(String query) {
+        if (query == null || query.isBlank()) {
+            return Set.of();
+        }
+        String c = compact(query);
+        Set<String> genres = new HashSet<>();
+        if (c.contains("로맨스") || c.contains("멜로") || c.contains("로코") || c.contains("로맨틱")
+                || c.contains("달달한") || c.contains("설레는") || c.contains("첫사랑") || c.contains("연애")) {
+            genres.add("로맨스");
+        }
+        if (c.contains("공포") || c.contains("호러") || c.contains("무서운") || c.contains("오컬트") || c.contains("귀신")) {
+            genres.add("공포");
+        }
+        if (c.contains("스릴러") || c.contains("서스펜스")) {
+            genres.add("스릴러");
+        }
+        if (c.contains("코미디") || c.contains("웃긴") || c.contains("유쾌한") || c.contains("코믹")) {
+            genres.add("코미디");
+        }
+        if (c.contains("액션") || c.contains("격투") || c.contains("첩보") || c.contains("블록버스터")) {
+            genres.add("액션");
+        }
+        if (c.contains("sf") || c.contains("공상과학") || c.contains("우주") || c.contains("타임루프")) {
+            genres.add("sf");
+        }
+        if (c.contains("판타지") || c.contains("마법")) {
+            genres.add("판타지");
+        }
+        if (c.contains("범죄") || c.contains("느와르") || c.contains("형사") || c.contains("마피아")) {
+            genres.add("범죄");
+        }
+        if (c.contains("미스터리") || c.contains("추리")) {
+            genres.add("미스터리");
+        }
+        if (c.contains("애니") || c.contains("만화")) {
+            genres.add("애니메이션");
+        }
+        if (c.contains("전쟁") || c.contains("군대") || c.contains("전투")) {
+            genres.add("전쟁");
+        }
+        if (c.contains("역사") || c.contains("사극") || c.contains("시대극")) {
+            genres.add("역사");
+        }
+        if (c.contains("음악") || c.contains("뮤지컬") || c.contains("밴드")) {
+            genres.add("음악");
+        }
+        if (c.contains("가족") || c.contains("어린이")) {
+            genres.add("가족");
+        }
+        if (c.contains("다큐")) {
+            genres.add("다큐멘터리");
+        }
+        return genres;
+    }
+
+    private static boolean matchesRequestedGenres(Document doc, Set<String> requestedGenres) {
+        if (requestedGenres.isEmpty()) {
+            return true;
+        }
+        Map<String, Object> m = doc.getMetadata();
+        String candGenres = compact(str(m.get("genres")));
+        String candKeywords = compact(str(m.getOrDefault("keywords", extractFieldFromContent(doc.getText(), "키워드:"))));
+        for (String req : requestedGenres) {
+            if (candGenres.contains(req)) {
+                return true;
+            }
+            if ("로맨스".equals(req) && (candKeywords.contains("로맨스") || candKeywords.contains("사랑") || candKeywords.contains("연애") || candKeywords.contains("멜로"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 밝고 따뜻한/설레는 취향 요청(로맨스·힐링·코미디·가족 등)에 전쟁·공포·범죄 등 상충하는 장르가 섞이는 것을 차단한다.
+     */
+    private static boolean hasConflictingGenre(Document doc, String query, Set<String> requestedGenres) {
+        if (query == null || query.isBlank()) {
+            return false;
+        }
+        String q = compact(query);
+        String candGenres = compact(str(doc.getMetadata().get("genres")));
+        boolean wantsLightOrRomantic = requestedGenres.contains("로맨스") || requestedGenres.contains("가족")
+                || q.contains("달달") || q.contains("설레") || q.contains("힐링") || q.contains("따뜻") || q.contains("잔잔");
+        if (wantsLightOrRomantic) {
+            if (!requestedGenres.contains("전쟁") && candGenres.contains("전쟁")) {
+                return true;
+            }
+            if (!requestedGenres.contains("공포") && candGenres.contains("공포")) {
+                return true;
+            }
+            if (!requestedGenres.contains("범죄") && !requestedGenres.contains("스릴러")
+                    && (candGenres.contains("범죄") || (candGenres.contains("역사") && !candGenres.contains("로맨스")))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -443,7 +559,8 @@ public class MovieRecommendService {
                 return searchFast(titleQuery);
             }
         }
-        return run(username, q.toLowerCase(), q, q, 0);
+        String cacheKey = compact(q).isEmpty() ? q.toLowerCase(Locale.ROOT) : compact(q);
+        return run(username, cacheKey, q, q, 0);
     }
 
     private static boolean isSeriesRequest(String query) {
@@ -664,8 +781,15 @@ public class MovieRecommendService {
         // 다차원 Re-ranking: 하이브리드 유사도 + 장르/키워드 정합성 + 실사/애니 일관성 + 시대성(최신성) + 평점 완성도
         final Document refForRank = referenceDoc;
         final String queryForRank = requestText;
+        final Set<String> requestedGenres = refForRank == null ? extractRequestedGenres(queryForRank) : Set.of();
         List<Document> ranked = new ArrayList<>(docs);
-        ranked.sort(Comparator.comparingDouble((Document d) -> -boostedScore(d, queryForRank, refForRank)));
+        ranked.sort(Comparator.comparingDouble((Document d) -> -boostedScore(d, queryForRank, refForRank, requestedGenres)));
+
+        long strictGenreMatches = ranked.stream()
+                .filter(d -> matchesRequestedGenres(d, requestedGenres) && !hasConflictingGenre(d, queryForRank, requestedGenres))
+                .count();
+        boolean enforceGenreFilter = !requestedGenres.isEmpty() && strictGenreMatches >= 6;
+
         Map<Integer, Document> byId = new LinkedHashMap<>();
         for (Document doc : ranked) {
             int id = intOf(doc.getMetadata().get("tmdbId"));
@@ -678,6 +802,12 @@ public class MovieRecommendService {
                 if (titleCompact.contains(excludeTitleCompact) || origCompact.contains(excludeTitleCompact)) {
                     continue;
                 }
+            }
+            if (refForRank == null && hasConflictingGenre(doc, queryForRank, requestedGenres)) {
+                continue;
+            }
+            if (enforceGenreFilter && !matchesRequestedGenres(doc, requestedGenres)) {
+                continue;
             }
             byId.putIfAbsent(id, doc);
         }
@@ -742,10 +872,11 @@ public class MovieRecommendService {
      * 다차원 Re-ranking 점수:
      * 1) RRF 하이브리드 순위 점수 + 코사인 벡터 유사도 원점수 결합
      * 2) 기준 작품(refDoc) 존재 시: 장르 교집합 보너스 + 키워드 교집합 보너스 + 실사/애니메이션 매체 일관성 보정
-     * 3) 시대성(최신성) 가중치 및 고전 미요청 시 노후 작품(1990년대 이전) 페널티
-     * 4) 평점 완성도 가중치 및 저평점 페널티
+     * 3) 명시적 장르 요청(requestedGenres) 존재 시: 일치 보너스(+0.45) 및 불일치/상충 장르 강력 페널티(-0.65 ~ -0.75)
+     * 4) 시대성(최신성) 가중치 및 고전 미요청 시 노후 작품(1990년대 이전) 페널티
+     * 5) 평점 완성도 가중치 및 저평점 페널티
      */
-    private static double boostedScore(Document d, String query, Document refDoc) {
+    private static double boostedScore(Document d, String query, Document refDoc, Set<String> requestedGenres) {
         Map<String, Object> m = d.getMetadata();
         double rrfPart = m.containsKey("hybrid_score") ? doubleOf(m.get("hybrid_score")) * 25.0 : 0.0;
         double vecPart = m.containsKey("vector_score")
@@ -813,9 +944,21 @@ public class MovieRecommendService {
                 long sharedKw = candKwSet.stream().filter(refKwSet::contains).count();
                 alignmentBonus += Math.min(0.20, sharedKw * 0.07);
             }
-        } else if (!queryWantsAnimation && candIsAnimation && query != null && !query.contains("가족") && !query.contains("어린이")) {
-            // 일반 실사 취향 검색에서도 애니메이션이 불필요하게 상위를 점유하지 않도록 소폭 보정
-            alignmentBonus -= 0.08;
+        } else {
+            if (!queryWantsAnimation && candIsAnimation && query != null && !query.contains("가족") && !query.contains("어린이")) {
+                // 일반 실사 취향 검색에서도 애니메이션이 불필요하게 상위를 점유하지 않도록 소폭 보정
+                alignmentBonus -= 0.08;
+            }
+            if (!requestedGenres.isEmpty()) {
+                if (matchesRequestedGenres(d, requestedGenres)) {
+                    alignmentBonus += 0.45;
+                } else {
+                    alignmentBonus -= 0.65;
+                }
+            }
+            if (hasConflictingGenre(d, query, requestedGenres)) {
+                alignmentBonus -= 0.75;
+            }
         }
 
         return similarity + recencyBonus + ratingBonus + alignmentBonus;
