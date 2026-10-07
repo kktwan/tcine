@@ -4,20 +4,29 @@ import com.t.tcine.domain.movie.dto.HomeMovie;
 import com.t.tcine.infra.tmdb.TmdbClient;
 import com.t.tcine.infra.tmdb.TmdbClient.TmdbMovie;
 import com.t.tcine.infra.kobis.KobisClient;
-import com.t.tcine.infra.kobis.KobisClient.BoxOfficeMovie;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * 영화 화면 첫머리의 "오늘의 인기 영화"와 "지금 상영 중" 목록. TMDB에서 가져와 30분 캐시한다.
- * AI/Qdrant를 쓰지 않아 비용이 없고, TMDB 키가 없거나 호출이 실패하면 빈 목록(섹션이 안 보임).
+ * 영화 화면 첫머리의 "오늘의 인기 영화", "지금 상영 중", "박스오피스", "한국 신작" 목록.
+ * TMDB/KOBIS에서 가져와 30분 캐시하며, 서버 기동 직후 및 주기적으로 백그라운드에서 미리 갱신해 초기 로딩 지연을 없앤다.
  */
 @Service
 public class MovieHomeService {
 
+    private static final Logger log = LoggerFactory.getLogger(MovieHomeService.class);
     private static final long CACHE_TTL_MILLIS = 30 * 60 * 1000L;
     private static final int MAX_ITEMS = 12;
     private static final String POSTER_BASE = "https://image.tmdb.org/t/p/w342";
@@ -25,10 +34,41 @@ public class MovieHomeService {
     private final TmdbClient tmdb;
     private final KobisClient kobis;
     private final Map<String, Cached> cache = new ConcurrentHashMap<>();
+    private final ExecutorService homePool = Executors.newFixedThreadPool(6, r -> {
+        Thread t = new Thread(r, "movie-home-loader");
+        t.setDaemon(true);
+        return t;
+    });
 
     public MovieHomeService(TmdbClient tmdb, KobisClient kobis) {
         this.tmdb = tmdb;
         this.kobis = kobis;
+    }
+
+    /** 서버 시작 직후 백그라운드에서 홈 화면 목록을 미리 적재한다 */
+    @EventListener(ApplicationReadyEvent.class)
+    public void warmUpOnStartup() {
+        CompletableFuture.runAsync(this::refreshAll, homePool);
+    }
+
+    /** 캐시 만료 전에 25분마다 백그라운드에서 미리 갱신한다 */
+    @Scheduled(fixedDelay = 25 * 60 * 1000L, initialDelay = 25 * 60 * 1000L)
+    public void scheduledRefresh() {
+        refreshAll();
+    }
+
+    private void refreshAll() {
+        try {
+            CompletableFuture.allOf(
+                    CompletableFuture.runAsync(() -> refreshCategory("trending_day"), homePool),
+                    CompletableFuture.runAsync(() -> refreshCategory("now_playing"), homePool),
+                    CompletableFuture.runAsync(() -> refreshCategory("korean_now"), homePool),
+                    CompletableFuture.runAsync(this::refreshBoxOffice, homePool)
+            ).join();
+            log.debug("영화 홈 캐시 백그라운드 갱신 완료");
+        } catch (Exception e) {
+            log.warn("영화 홈 캐시 갱신 중 오류: {}", e.getMessage());
+        }
     }
 
     /** 오늘의 인기(트렌딩) 영화 */
@@ -46,10 +86,36 @@ public class MovieHomeService {
         return load("now_playing");
     }
 
+    /** 박스오피스 순위 (30분 캐시 + 병렬 TMDB 매칭) */
     public List<HomeMovie> boxOffice() {
-        return kobis.dailyMovies().stream().map(item -> tmdb.searchMovie(item.title()).stream().findFirst()
-                .map(m -> toHome(m, item.audienceCount())).orElse(null))
-                .filter(java.util.Objects::nonNull).toList();
+        long now = System.currentTimeMillis();
+        Cached cached = cache.get("box_office");
+        if (cached != null && cached.expiresAt() > now) {
+            return cached.items();
+        }
+        if (cached != null) {
+            CompletableFuture.runAsync(this::refreshBoxOffice, homePool);
+            return cached.items();
+        }
+        return refreshBoxOffice();
+    }
+
+    private List<HomeMovie> refreshBoxOffice() {
+        long now = System.currentTimeMillis();
+        List<CompletableFuture<HomeMovie>> futures = kobis.dailyMovies().stream()
+                .map(item -> CompletableFuture.supplyAsync(() ->
+                        tmdb.searchMovie(item.title()).stream().findFirst()
+                                .map(m -> toHome(m, item.audienceCount()))
+                                .orElse(null), homePool))
+                .toList();
+        List<HomeMovie> items = futures.stream()
+                .map(CompletableFuture::join)
+                .filter(Objects::nonNull)
+                .toList();
+        if (!items.isEmpty()) {
+            cache.put("box_office", new Cached(items, now + CACHE_TTL_MILLIS));
+        }
+        return items;
     }
 
     private List<HomeMovie> load(String category) {
@@ -58,13 +124,22 @@ public class MovieHomeService {
         if (cached != null && cached.expiresAt() > now) {
             return cached.items();
         }
+        if (cached != null) {
+            CompletableFuture.runAsync(() -> refreshCategory(category), homePool);
+            return cached.items();
+        }
+        return refreshCategory(category);
+    }
+
+    private List<HomeMovie> refreshCategory(String category) {
+        long now = System.currentTimeMillis();
         List<HomeMovie> items = tmdb.list(category, 1).stream()
                 .filter(m -> m.posterPath() != null && !m.posterPath().isBlank())
                 .limit(MAX_ITEMS)
                 .map(MovieHomeService::toHome)
                 .toList();
         if (!items.isEmpty()) {
-            cache.put(category, new Cached(items, now + CACHE_TTL_MILLIS)); // 실패(빈 목록)는 캐시하지 않는다
+            cache.put(category, new Cached(items, now + CACHE_TTL_MILLIS));
         }
         return items;
     }
@@ -82,6 +157,7 @@ public class MovieHomeService {
         Double rating = m.voteAverage() != null && m.voteAverage() > 0 ? m.voteAverage() : null;
         return new HomeMovie(m.id(), title, year, rating, null, POSTER_BASE + m.posterPath(), title + "와 비슷한 영화");
     }
+
     private static HomeMovie toHome(TmdbMovie m, long audience) {
         HomeMovie base = toHome(m);
         return new HomeMovie(base.id(), base.title(), base.year(), base.rating(), audience, base.posterUrl(), base.query());

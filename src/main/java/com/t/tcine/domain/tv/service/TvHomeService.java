@@ -4,12 +4,16 @@ import com.t.tcine.domain.tv.dto.HomeTv;
 import com.t.tcine.infra.tmdb.TmdbClient;
 import com.t.tcine.infra.tmdb.TmdbClient.TmdbTv;
 import com.t.tcine.infra.tmdb.TmdbClient.TvDetail;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -17,17 +21,19 @@ import java.util.concurrent.Executors;
 
 /**
  * 시리즈 화면 첫머리의 인기/한국 신작 목록. TMDB에서 가져와 방송사/OTT 이름과 함께 30분 캐시한다.
+ * 서버 시작 직후 및 25분 주기로 백그라운드에서 미리 적재해 초기 로딩 지연을 제거한다.
  */
 @Service
 public class TvHomeService {
 
+    private static final Logger log = LoggerFactory.getLogger(TvHomeService.class);
     private static final long CACHE_TTL_MILLIS = 30 * 60 * 1000L;
     private static final int MAX_ITEMS = 12;
     private static final String POSTER_BASE = "https://image.tmdb.org/t/p/w342";
 
     private final TmdbClient tmdb;
     private final Map<String, Cached> cache = new ConcurrentHashMap<>();
-    private final ExecutorService detailPool = Executors.newFixedThreadPool(6, r -> {
+    private final ExecutorService detailPool = Executors.newFixedThreadPool(8, r -> {
         Thread t = new Thread(r, "tv-home-detail");
         t.setDaemon(true);
         return t;
@@ -35,6 +41,31 @@ public class TvHomeService {
 
     public TvHomeService(TmdbClient tmdb) {
         this.tmdb = tmdb;
+    }
+
+    /** 서버 기동 직후 백그라운드에서 시리즈 홈 캐시를 미리 채운다 */
+    @EventListener(ApplicationReadyEvent.class)
+    public void warmUpOnStartup() {
+        CompletableFuture.runAsync(this::refreshAll, detailPool);
+    }
+
+    /** 25분마다 백그라운드에서 시리즈 홈 캐시를 갱신한다 */
+    @Scheduled(fixedDelay = 25 * 60 * 1000L, initialDelay = 25 * 60 * 1000L)
+    public void scheduledRefresh() {
+        refreshAll();
+    }
+
+    private void refreshAll() {
+        try {
+            CompletableFuture.allOf(
+                    CompletableFuture.runAsync(() -> refreshCategory("korean_now"), detailPool),
+                    CompletableFuture.runAsync(() -> refreshCategory("trending_day"), detailPool),
+                    CompletableFuture.runAsync(() -> refreshCategory("korean"), detailPool)
+            ).join();
+            log.debug("시리즈 홈 캐시 백그라운드 갱신 완료");
+        } catch (Exception e) {
+            log.warn("시리즈 홈 캐시 갱신 중 오류: {}", e.getMessage());
+        }
     }
 
     /** 오늘의 인기 시리즈 */
@@ -58,6 +89,15 @@ public class TvHomeService {
         if (cached != null && cached.expiresAt() > now) {
             return cached.items();
         }
+        if (cached != null) {
+            CompletableFuture.runAsync(() -> refreshCategory(category), detailPool);
+            return cached.items();
+        }
+        return refreshCategory(category);
+    }
+
+    private List<HomeTv> refreshCategory(String category) {
+        long now = System.currentTimeMillis();
         List<TmdbTv> rawList = tmdb.listTv(category, 1).stream()
                 .filter(s -> s.posterPath() != null && !s.posterPath().isBlank())
                 .limit(MAX_ITEMS)
