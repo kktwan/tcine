@@ -17,7 +17,7 @@ services:
       - tcine-net
 
   jenkins:
-    build: ./jenkins
+    image: jenkins/jenkins:lts-jdk21
     container_name: tcine-jenkins
     restart: unless-stopped
     user: root
@@ -29,6 +29,8 @@ services:
     volumes:
       - ./jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker:ro
+      - /usr/libexec/docker/cli-plugins:/usr/libexec/docker/cli-plugins:ro
       - /data/tcine:/data/tcine
     networks:
       - tcine-net
