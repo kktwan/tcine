@@ -3,7 +3,9 @@ spring:
     name: tcine
   config:
     # 로컬 IntelliJ에서 실행할 때 프로젝트 루트의 .env 파일을 자동으로 읽어온다 (없어도 무방)
-    import: optional:file:.env[.properties]
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:./.env[.properties]
   ai:
     google:
       genai:
@@ -20,7 +22,7 @@ spring:
     # 채팅은 Gemini, 임베딩은 OpenAI. 두 스타터가 모두 있으면 빈이 겹치므로 어느 쪽을 쓸지 정하고,
     # 쓰지 않는 OpenAI 기능(이미지/음성/검열)은 끈다.
     model:
-      chat: google-genai
+      chat: openai
       embedding: openai
       image: none
       moderation: none
@@ -30,6 +32,10 @@ spring:
     openai:
       # 키가 비어 있으면 Spring AI가 시작 단계에서 실패할 수 있어 자리표시 값을 둔다
       api-key: ${OPENAI_API_KEY:not-configured}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          temperature: 0.3
       embedding:
         model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
         # 벡터 크기를 줄여 저장 공간과 메모리를 아낀다 (영화·시리즈 수천 편에는 충분)

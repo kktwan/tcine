@@ -41,11 +41,24 @@
     });
     form.addEventListener('submit', function () {
       button.disabled = true;
-      label.textContent = '찾는 중...';
+      label.textContent = '검색 중...';
+      var loadingBox = document.getElementById('ai-loading-box');
+      var loadingText = document.getElementById('ai-loading-text');
+      if (loadingBox && loadingText) {
+          loadingBox.hidden = false;
+          var q = form.querySelector('input[name="q"]').value || '';
+          if (q.includes('비슷한') || q.includes('같은')) {
+              loadingText.textContent = 'AI가 전 세계 명작 중 결이 비슷한 작품을 찾는 중입니다 🍿 (약 5~8초)';
+          } else {
+              loadingText.textContent = 'AI 큐레이터가 열심히 엄선하고 있습니다 🍿 (약 5초)';
+          }
+      }
     });
     window.addEventListener('pageshow', function () {
       button.disabled = false;
       label.textContent = original;
+      var loadingBox = document.getElementById('ai-loading-box');
+      if (loadingBox) loadingBox.hidden = true;
     });
   }
 

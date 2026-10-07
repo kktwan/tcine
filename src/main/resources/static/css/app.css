@@ -192,12 +192,45 @@ input[type=checkbox] { width: 18px; height: 18px; padding: 0; accent-color: var(
   display: grid;
   gap: 10px;
 }
-.search-row { display: flex; gap: 8px; }
+.search-row { position: relative; display: flex; gap: 8px; }
 .search-row input { flex: 1; min-width: 0; }
 .movie-search-panel { width: 100%; max-width: 1100px; margin: 0 auto; padding: 26px 32px; background: var(--surface); border: none; box-shadow: none; }
-.movie-search-panel .search-row { width: min(100%, 980px); max-width: none; margin: 0 auto; gap: 12px; }
-.movie-search-panel .search-row input { height: 56px; padding: 0 20px; border-radius: 12px; font-size: 1rem; background: var(--bg); }
-.movie-search-panel .search-row .btn { flex: none; min-width: 104px; height: 56px; border-radius: 12px; font-size: .95rem; }
+.movie-search-panel .search-row { width: min(100%, 980px); max-width: none; margin: 0 auto; }
+.movie-search-panel .search-row input { 
+    height: 56px; 
+    padding: 0 60px 0 24px; 
+    border-radius: 28px; 
+    font-size: 1.05rem; 
+    background: var(--bg);
+    border: 1px solid var(--line);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s ease;
+}
+.movie-search-panel .search-row input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 4px 20px rgba(0, 100, 255, 0.12);
+    outline: none;
+}
+.movie-search-panel .search-row .btn { 
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    width: 40px; 
+    height: 40px; 
+    min-width: unset;
+    border-radius: 50%;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.movie-search-panel .search-row .btn svg {
+    width: 20px; height: 20px; fill: currentColor;
+}
+.movie-search-panel .search-row .btn .label-text {
+    display: none;
+}
 .movie-search-panel .near-note { display: block; max-width: 760px; margin: 10px auto 0; text-align: center; font-size: .8rem; }
 .search-row select { width: auto; min-width: 120px; }
 .movie-search-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -427,13 +460,12 @@ details.edit form { display: grid; gap: 10px; margin-top: 12px; }
   .page-head-in { padding: 24px 16px 20px; }
   .page-head h1 { font-size: 1.45rem; }
   .container { padding: 18px 14px 56px; }
-  .search-row { flex-direction: column; }
-  .search-row input { flex: none; width: 100%; }
+  /* .search-row { flex-direction: column; } */
+  /* .search-row input { flex: none; width: 100%; } */
   .search-row select { width: 100%; }
   .movie-search-panel { padding: 8px 0 14px; }
   .movie-search-panel .search-row { gap: 10px; }
-  .movie-search-panel .search-row input { height: 50px; min-height: 50px; padding: 0 16px; font-size: .95rem; }
-  .movie-search-panel .search-row .btn { width: 100%; height: 48px; }
+  .movie-search-panel .search-row input { height: 50px; min-height: 50px; font-size: .95rem; }
   .grid, .dash-grid { grid-template-columns: 1fr; }
   .auth-card { padding: 28px 22px; }
 }
@@ -565,8 +597,92 @@ details.edit form { display: grid; gap: 10px; margin-top: 12px; }
 .chart-empty { white-space: pre-line; }
 .chart-card[hidden] { display: none; }
 
-/* AI 추천: AI의 소개 문장과 번호가 붙은 추천 카드 */
-.ai-summary { margin: 22px 0 0; font-size: 1.02rem; line-height: 1.6; max-width: 680px; }
+/* AI 추천 Callout 블록 */
+.ai-callout {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  width: min(100%, 980px);
+  margin: 24px auto 10px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--primary);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .05);
+}
+.ai-callout-icon {
+  font-size: 1.35rem;
+  line-height: 1.2;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ai-callout-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ai-callout-title {
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--primary-600);
+}
+.ai-callout-text {
+  margin: 0;
+  font-size: .95rem;
+  line-height: 1.65;
+  color: var(--text);
+  font-weight: 500;
+  word-break: keep-all;
+}
+
+/* AI 로딩 박스 */
+.ai-loading-box {
+  width: min(100%, 980px);
+  margin: 14px auto 0;
+  padding: 12px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--primary-600);
+  font-size: 0.9rem;
+  font-weight: 700;
+  animation: fadeIn 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+.ai-loading-box[hidden] { display: none !important; }
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 3px solid rgba(0, 100, 255, 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 기존 ai-summary 호환 */
+.ai-summary {
+  margin: 20px 0 10px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--primary);
+  font-size: .95rem;
+  line-height: 1.65;
+  color: var(--text);
+  max-width: 900px;
+}
 .picks { display: flex; flex-direction: column; gap: 14px; max-width: 680px; }
 .step-no {
   flex: none; display: grid; place-items: center;
@@ -574,7 +690,26 @@ details.edit form { display: grid; gap: 10px; margin-top: 12px; }
   background: var(--text); color: var(--bg);
   font-size: .9rem; font-weight: 800;
 }
-.reason { margin: 0; font-size: .9rem; color: var(--text); }
+/* 카드 내 추천 사유 하이라이트 블록 */
+.reason {
+  margin: 2px 0 4px;
+  padding: 7px 12px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 8px 8px 0;
+  font-size: .84rem;
+  line-height: 1.5;
+  color: var(--text);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  word-break: keep-all;
+}
+.reason::before {
+  content: "💡";
+  font-size: .82rem;
+  flex-shrink: 0;
+}
 .picks .card .actions { margin-top: 0; }
 
 /* 영화 추천: 포스터가 있는 카드 */
@@ -671,35 +806,35 @@ details.edit form { display: grid; gap: 10px; margin-top: 12px; }
   background-size: cover; background-position: center; background-repeat: no-repeat;
   box-shadow: 0 2px 8px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .15);
 }
-/* Netflix: 검은 원 + 붉은 N 리본 */
+/* Netflix */
 .net-badge[data-net="Netflix"], .net-badge[data-net="NETFLIX"], .net-badge[data-net="넷플릭스"] {
   background-color: #000;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%23000'/%3E%3Cpath d='M11.5 8.5h4v19h-4zM20.5 8.5h4v19h-4z' fill='%23b1060f'/%3E%3Cpath d='M11.5 8.5h4.1l8.9 19h-4.1z' fill='%23e50914'/%3E%3C/svg%3E");
+  background-image: url("/images/netflix-logo.png");
 }
-/* TVING: 다홍/레드 원 + TV 심볼 */
+/* TVING */
 .net-badge[data-net="TVING"], .net-badge[data-net="티빙"] {
   background-color: #ff153c;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%23ff153c'/%3E%3Cpath d='M8.5 12h10.5v3.6h-3.4v10.4h-3.8V15.6H8.5z' fill='%23111'/%3E%3Cpath d='M18.2 12h4l2 8.2L26.2 12h3.8l-4.2 14h-3.6z' fill='%23fff'/%3E%3C/svg%3E");
+  background-image: url("/images/tving-logo.png");
 }
-/* Coupang Play: 흰 원 + 컬러 그라데이션 플레이 심볼 */
+/* Coupang Play */
 .net-badge[data-net="Coupang Play"], .net-badge[data-net="쿠팡플레이"] {
-  background-color: #fff;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cdefs%3E%3ClinearGradient id='cp1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2300c8ff'/%3E%3Cstop offset='52%25' stop-color='%236c47ff'/%3E%3Cstop offset='100%25' stop-color='%23ff3b6b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='18' cy='18' r='18' fill='%23ffffff'/%3E%3Cpath d='M13.2 9.8c0-1.3 1.4-2.1 2.5-1.4l11.6 7.4c1 .6 1 2.1 0 2.8l-11.6 7.4c-1.1.7-2.5-.1-2.5-1.4V9.8z' fill='url(%23cp1)'/%3E%3C/svg%3E");
+  background-color: #000;
+  background-image: url("/images/coupangplay-logo.png");
 }
-/* Wavve: 블루 원 + 흰색 W 웨이브 심볼 */
+/* Wavve */
 .net-badge[data-net="Wavve"], .net-badge[data-net="웨이브"] {
   background-color: #0050ff;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%230050ff'/%3E%3Cpath d='M7.8 12.2h3.7l2.6 8.3 2.5-8.3h3.2l2.5 8.3 2.6-8.3h3.7l-4.5 12.6h-3.4l-2.5-7.6-2.5 7.6h-3.4z' fill='%23fff'/%3E%3C/svg%3E");
+  background-image: url("/images/wavve-logo.png");
 }
-/* Disney+: 딥틸 그라데이션 원 + 아크 & Disney+ 표기 */
+/* Disney+ */
 .net-badge[data-net="Disney+"], .net-badge[data-net="디즈니+"] {
   background-color: #062f44;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cdefs%3E%3ClinearGradient id='dp' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23041b29'/%3E%3Cstop offset='100%25' stop-color='%230b8394'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='18' cy='18' r='18' fill='url(%23dp)'/%3E%3Cpath d='M10 15.5c3.5-4.8 11.5-5.2 15.8-1' fill='none' stroke='%237ce8f5' stroke-width='1.5' stroke-linecap='round'/%3E%3Ctext x='18' y='22.5' text-anchor='middle' fill='%23fff' font-family='Arial,sans-serif' font-weight='900' font-size='7.5' letter-spacing='-0.3'%3EDisney+%3C/text%3E%3C/svg%3E");
+  background-image: url("/images/disneyplus-logo.png");
 }
-/* Watcha: 검은 원 + 핑크 W 심볼 */
+/* Watcha */
 .net-badge[data-net="Watcha"], .net-badge[data-net="WATCHA"], .net-badge[data-net="왓챠"] {
   background-color: #08080a;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%2308080a'/%3E%3Cpath d='M8.2 11.8h3.8l2.4 8.6 2.3-8.6h3l2.3 8.6 2.4-8.6h3.8l-4.3 13.2h-3.5l-2.2-7.8-2.2 7.8h-3.5z' fill='%23ff0558'/%3E%3C/svg%3E");
+  background-image: url("/images/watcha-logo.png");
 }
 
 /* 영화 상세 */
