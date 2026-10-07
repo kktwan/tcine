@@ -1,1 +1,1 @@
-set $service_url tcine-blue;
+set $tcine_url tcine-blue;

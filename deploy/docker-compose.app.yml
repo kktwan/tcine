@@ -6,10 +6,10 @@ x-app-common: &app-common
   env_file:
     - .env
   environment:
-    DB_URL: jdbc:postgresql://tcine-db:5432/tcine
-    REDIS_HOST: tcine-redis
+    DB_URL: jdbc:postgresql://infra-postgres:5432/tcine
+    REDIS_HOST: infra-redis
     REDIS_PORT: "6379"
-    QDRANT_HOST: tcine-qdrant
+    QDRANT_HOST: infra-qdrant
     QDRANT_GRPC_PORT: "6334"
     SPRING_THYMELEAF_CACHE: "true"
     JAVA_TOOL_OPTIONS: "-Xms512m -Xmx2048m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
@@ -18,7 +18,7 @@ x-app-common: &app-common
     - "8080"
   mem_limit: 3g
   networks:
-    - tcine-net
+    - infra-net
   logging:
     driver: json-file
     options: { max-size: "10m", max-file: "3" }
@@ -33,5 +33,5 @@ services:
     container_name: tcine-green
 
 networks:
-  tcine-net:
+  infra-net:
     external: true

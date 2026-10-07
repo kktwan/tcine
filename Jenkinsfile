@@ -27,7 +27,8 @@ pipeline {
         SERVICE_NAME    = "tcine"
         GIT_REPO_URL    = "https://github.com/kktwan/tcine.git"
         DEPLOY_DIR      = "/data/tcine"
-        NGINX_CONTAINER = "tcine-nginx"
+        NGINX_CONTAINER = "infra-nginx"
+        NGINX_INC_FILE  = "/data/infra/nginx/conf.d/tcine-url.inc"
     }
 
     stages {
@@ -147,9 +148,9 @@ pipeline {
                     sh "docker exec ${newSlot} curl -s -o /dev/null http://localhost:8080/login || true"
                     echo "✅ [${newSlot}] JVM 워밍업 완료"
 
-                    // 5. Nginx 무중단 스위칭 (upstream 없이 service-url.inc 변수 변경 후 reload)
+                    // 5. 공용 Nginx 무중단 스위칭 (tcine-url.inc 변수 변경 후 reload)
                     sh """
-                        echo "set \\\$service_url ${newSlot};" > ${DEPLOY_DIR}/nginx/service-url.inc
+                        echo "set \\\$tcine_url ${newSlot};" > ${NGINX_INC_FILE}
                         docker exec ${NGINX_CONTAINER} nginx -s reload
                     """
                     echo "✅ Nginx 트래픽 무중단 전환 완료 → ${newSlot}"
