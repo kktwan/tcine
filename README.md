@@ -36,7 +36,8 @@ src/main/java/com/t/tcine
 ├─ domain
 │  ├─ member       회원가입, 로그인, 비밀번호 정책 (Security UserDetailsService)
 │  ├─ movie        영화 추천·상세·색인 (TMDB -> Qdrant 하이브리드 검색 -> Gemini RAG)
-│  └─ tv           시리즈(드라마·예능·애니) 추천·상세·색인
+│  ├─ tv           시리즈(드라마·예능·애니) 추천·상세·색인
+│  └─ search       영화·시리즈 공통 검색 엔진 (검색어 해석, 하이브리드 RRF·재순위, 코퍼스 캐시, 추천 공통 흐름)
 ├─ infra
 │  ├─ tmdb         TMDB 영화·시리즈 API 클라이언트
 │  ├─ kobis        KOBIS 영화진흥위원회 박스오피스 클라이언트
@@ -44,6 +45,7 @@ src/main/java/com/t/tcine
 └─ global          보안 설정(SecurityConfig), 스케줄링, 예외 처리, 공통 모델(ModelAdvice)
 
 src/main/resources
+├─ search-dictionary.yml  검색 어휘 사전 (장르 표현, OTT 별칭, 불용어 등)
 ├─ templates       Thymeleaf 화면 (movies, movie-detail, tv, tv-detail, login, signup, fragments)
 ├─ static/css      app.css
 ├─ static/js       movies.js, login.js

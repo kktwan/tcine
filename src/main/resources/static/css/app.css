@@ -656,6 +656,8 @@ details.edit form { display: grid; gap: 10px; margin-top: 12px; }
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 .ai-loading-box[hidden] { display: none !important; }
+/* 새 검색 중에는 이전 검색의 코멘트·결과를 숨긴다 (movies.js) */
+.ai-callout[hidden], .list-head[hidden], .movie-list[hidden], .movie-list-more-wrap[hidden], .toast[hidden] { display: none !important; }
 .spinner {
   width: 18px;
   height: 18px;

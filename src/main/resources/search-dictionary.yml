@@ -1,0 +1,252 @@
+# 검색어 해석(QueryAnalyzer)과 순위 규칙(RankingEngine)이 쓰는 사전.
+# 코드를 고치지 않고 이 파일만 고쳐서 새 OTT, 장르 표현, 불용어를 추가할 수 있다.
+# 영화/TV 점수 가중치는 application.yml 의 search.ranking.* 에 있다.
+#
+# 주의: 비교는 소문자·공백/구두점 제거(compact) 후에 하므로, 아래 비교용 단어는 모두 소문자로 적는다.
+search:
+  dictionary:
+
+    # "OO와 비슷한 영화" 형태의 질의에서 기준 작품 제목(그룹 1)을 뽑는 정규식
+    similar-query-pattern: '^(.+?)\s*(?:와|과|이랑|랑|하고)?\s*(?:비슷한|유사한|같은|닮은|느낌의|스타일의|풍의|결의)\s*(?:분위기의|느낌의|장르의|스타일의|결의)?\s*(?:영화|드라마|시리즈|예능|애니|애니메이션|작품|추천.*)?$'
+
+    # 이 표현이 있으면 "고전을 원한다"고 보고 오래된 작품에 감점하지 않는다
+    classic-era-pattern: '(고전|옛날|명작|클래식|추억|흑백|19[5-9][0-9]|[5-9]0년대|응답하라)'
+
+    # 검색 핵심어에서 제외할 일반 단어
+    stopwords:
+      - 영화
+      - 드라마
+      - 시리즈
+      - 예능
+      - 애니
+      - 애니메이션
+      - 작품
+      - 전부
+      - 전체
+      - 모두
+      - 정주행
+      - 몇편
+      - 모음
+      - 감독
+      - 작가
+      - 배우
+      - 출연
+      - 주연
+      - 연출
+      - 제작
+      - 나오는
+      - 나온
+      - 출연한
+      - 찍은
+      - 추천
+      - 추천해줘
+      - 알려줘
+      - 찾아줘
+      - 볼만한
+      - 재밌는
+      - 재미있는
+      - 좋은
+      - 최고의
+      - 인기
+      - 인기있는
+      - 유명한
+      - 최신
+      - 신작
+      - 요즘
+      - 순
+      - 순위
+      - 리스트
+      - 목록
+      - 오리지널
+      - 독점
+      - 방영
+      - 비슷한
+      - 유사한
+      - 같은
+      - 닮은
+      - 느낌
+      - 느낌의
+      - 스타일
+      - 스타일의
+      - 분위기
+      - 분위기의
+
+    # 조사처럼 끝나지만 실제로는 단어의 일부인 외래어 끝말 (조사 제거 대상에서 보호)
+    protected-word-suffixes:
+      - 플레이
+      - 스토리
+      - 미스터리
+      - 판타지
+      - 코미디
+      - 패밀리
+      - 다큐멘터리
+      - 하모니
+      - 심포니
+      - 데이
+      - 보이
+      - 토이
+      - 조이
+      - 에세이
+      - 멜로
+      - 솔로
+      - 히어로
+      - 티비
+      - 비디오
+
+    # 단어 끝에서 떼어 내는 한국어 조사 (앞에 있는 것부터 먼저 시도)
+    particle-suffixes:
+      - 이랑
+      - 으로
+      - 에서
+      - 하고
+      - " 같은"
+      - 같은
+      - 은
+      - 는
+      - 이
+      - 가
+      - 을
+      - 를
+      - 의
+      - 에
+      - 로
+      - 와
+      - 과
+      - 랑
+      - 도
+      - 만
+
+    # "시리즈 전체 보기" 요청으로 보는 표현 (영화에서 제목 검색으로 돌린다)
+    series-request-triggers: [시리즈, 전부, 전체, 모두, 정주행, 몇편]
+    # 위 요청에서 제목만 남기려고 지우는 표현
+    series-title-strip-pattern: '(?i)(시리즈|전부|전체|모두|정주행|[0-9]+\s*편)'
+
+    # 질의에 이 표현이 있으면 애니메이션/가족 작품을 원한다고 보고 관련 감점을 하지 않는다
+    animation-triggers: [애니, 만화]
+    family-triggers: [가족, 어린이]
+
+    # OTT/방송사 이름의 띄어쓰기·표기 차이를 하나로 맞추는 규칙 (위에서부터 차례로 적용)
+    ott-spacing:
+      - { pattern: '(?i)쿠팡\s+플레이', replacement: 쿠팡플레이 }
+      - { pattern: '(?i)디즈니\s*(\+|플러스)', replacement: 디즈니플러스 }
+      - { pattern: '(?i)애플\s*(tv\+?|티비\+?)', replacement: 애플티비 }
+      - { pattern: '(?i)아마존\s+프라임(\s+비디오)?', replacement: 아마존프라임 }
+      - { pattern: '(?i)프라임\s+비디오', replacement: 프라임비디오 }
+
+    # 요청 장르 추출 규칙. triggers 중 하나라도 질의에 있으면 장르를 요청한 것으로 본다.
+    # targets 는 작품 유형(movie/tv)별로 찾을 장르 값이다 (TV는 TMDB 장르 체계가 달라서 값이 더 많다).
+    genres:
+      - name: 로맨스
+        triggers: [로맨스, 멜로, 로코, 로맨틱, 달달한, 설레는, 첫사랑, 연애]
+        movie: [로맨스]
+        tv: [로맨스]
+      - name: 스릴러
+        triggers: [스릴러, 서스펜스]
+        movie: [스릴러]
+        tv: [미스터리, 범죄]
+      - name: 공포
+        triggers: [공포, 호러, 무서운, 오컬트, 귀신]
+        movie: [공포]
+        tv: [미스터리, 범죄]
+      - name: 코미디
+        triggers: [코미디, 웃긴, 유쾌한, 코믹, 시트콤]
+        movie: [코미디]
+        tv: [코미디]
+      - name: 액션
+        triggers: [액션, 격투, 첩보, 블록버스터]
+        movie: [액션]
+        tv: [액션, action]
+      - name: sf
+        triggers: [sf, 공상과학, 우주, 타임루프]
+        movie: [sf]
+        tv: [sf, scifi]
+      - name: 판타지
+        triggers: [판타지, 마법]
+        movie: [판타지]
+        tv: [판타지, fantasy, scifi]
+      - name: 범죄
+        triggers: [범죄, 느와르, 형사, 마피아, 수사, 추리]
+        movie: [범죄]
+        tv: [범죄, 미스터리]
+      - name: 미스터리
+        triggers: [미스터리, 추리]
+        movie: [미스터리]
+        tv: [미스터리]
+      - name: 애니메이션
+        triggers: [애니, 만화]
+        movie: [애니메이션]
+        tv: [애니메이션]
+      - name: 전쟁
+        triggers: [전쟁, 군대, 전투]
+        movie: [전쟁]
+        tv: [전쟁]
+      - name: 역사
+        triggers: [역사, 사극, 시대극]
+        movie: [역사]
+        tv: [역사]
+      - name: 음악
+        triggers: [음악, 뮤지컬, 밴드]
+        movie: [음악]
+        tv: [음악]
+      - name: 가족
+        triggers: [가족, 어린이]
+        movie: [가족]
+        tv: [가족]
+      - name: 다큐멘터리
+        triggers: [다큐]
+        movie: [다큐멘터리]
+        tv: [다큐멘터리]
+      - name: 예능
+        triggers: [예능, 리얼리티, 토크쇼]
+        movie: []
+        tv: [reality, talk, 예능]
+
+    # 요청 장르를 장르 필드에서 못 찾았을 때, 키워드에서 같은 뜻의 단어를 찾는 규칙
+    # keywords 는 영화/TV 공통, tv-keywords 는 TV에서만 더 찾는다.
+    # (TV는 장르 값이 거칠어서 요청 장르 이름 자체가 키워드에 있어도 일치로 본다: tv-keyword-match-genre-name)
+    genre-keyword-synonyms:
+      - genre: 로맨스
+        keywords: [사랑, 연애, 멜로]
+        tv-keywords: [로맨틱, 달달]
+    tv-keyword-match-genre-name: true
+
+    # 가볍고 따뜻한 분위기를 원하는지 판단하는 규칙 (이 경우 전쟁·공포·범죄물이 섞이는 것을 막는다)
+    light-mood:
+      trigger-genres: [로맨스, 가족]
+      triggers: [달달, 설레, 힐링, 따뜻]
+      movie-extra-triggers: [잔잔]
+
+    # 가볍고 따뜻한 분위기 요청에 어울리지 않는 장르 차단 규칙.
+    # blocked 장르가 후보에 있고, 사용자가 unless-requested 장르를 직접 요청하지 않았으면 차단한다.
+    # unless-candidate-has 장르를 후보가 함께 가지면 차단하지 않는다.
+    conflicts:
+      movie:
+        - { blocked: [전쟁], unless-requested: [전쟁] }
+        - { blocked: [공포], unless-requested: [공포] }
+        - { blocked: [범죄], unless-requested: [범죄, 스릴러] }
+        - { blocked: [역사], unless-requested: [범죄, 스릴러], unless-candidate-has: [로맨스] }
+      tv:
+        - { blocked: [war, 전쟁], unless-requested: [] }
+        - { blocked: [범죄], unless-requested: [범죄, 미스터리] }
+
+    # OTT/방송사 사전.
+    #   id               내부 표준 이름 (요청 추출 결과)
+    #   query-triggers   질의에 이 표현이 있으면 해당 OTT를 요청한 것
+    #   term-triggers    검색 핵심어에 이 표현이 있으면 data-aliases 로 작품의 방송사 필드를 비교
+    #   data-aliases     작품 데이터(networks 필드)에 적힌 표기들
+    # term-triggers 는 위에서부터 먼저 맞는 항목 하나만 쓴다.
+    networks:
+      - { id: netflix, query-triggers: [넷플릭스, 넷플, netflix], term-triggers: [넷플, netflix], data-aliases: [netflix, 넷플릭스] }
+      - { id: disney, query-triggers: [디즈니, disney], term-triggers: [디즈니, disney], data-aliases: [disney, 디즈니] }
+      - { id: apple, query-triggers: [애플티비, 애플tv, appletv], term-triggers: [애플, apple], data-aliases: [apple, 애플] }
+      - { id: tving, query-triggers: [티빙, tving], term-triggers: [티빙, tving], data-aliases: [tving, 티빙] }
+      - { id: wavve, query-triggers: [웨이브, wavve], term-triggers: [웨이브, wavve], data-aliases: [wavve, 웨이브] }
+      - { id: coupang, query-triggers: [쿠팡, coupang], term-triggers: [쿠팡, coupang], data-aliases: [coupang, 쿠팡] }
+      - { id: watcha, query-triggers: [왓챠, watcha], term-triggers: [왓챠, watcha], data-aliases: [watcha, 왓챠] }
+      - { id: tvn, query-triggers: [티비엔, tvn], term-triggers: [티비엔, tvn], data-aliases: [tvn] }
+      - { id: jtbc, query-triggers: [제이티비씨, jtbc], term-triggers: [제이티비씨, jtbc], data-aliases: [jtbc] }
+      - { id: sbs, query-triggers: [에스비에스, sbs], term-triggers: [], data-aliases: [] }
+      - { id: kbs, query-triggers: [케이비에스, kbs], term-triggers: [], data-aliases: [] }
+      - { id: mbc, query-triggers: [엠비씨, mbc], term-triggers: [], data-aliases: [] }
+      - { id: ena, query-triggers: [ena], term-triggers: [], data-aliases: [] }
+      - { id: ocn, query-triggers: [오씨엔, ocn], term-triggers: [], data-aliases: [] }

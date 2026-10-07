@@ -28,14 +28,21 @@ com.t.tcine
 │  │  ├─ entity/Member.java
 │  │  ├─ repository/MemberRepository.java
 │  │  └─ service/{MemberService, CustomUserDetailsService, PasswordPolicy}.java
+│  ├─ search                         (영화·시리즈 공통 검색 엔진)
+│  │  ├─ MediaKind.java              (MOVIE / TV 구분)
+│  │  ├─ config/{SearchDictionary, RankingProperties}.java  (사전·가중치 설정 바인딩)
+│  │  ├─ query/QueryAnalyzer.java    (검색어 해석: 핵심어, 요청 장르·OTT, "OO와 비슷한")
+│  │  ├─ ranking/{RankingEngine, DocFields}.java  (키워드 점수, RRF, boostedScore)
+│  │  ├─ corpus/{AbstractCorpusManager, CorpusSource}.java  (인메모리 코퍼스 캐시)
+│  │  └─ recommend/{AbstractRecommendService, ResultCache, UsageLimiter, RecommendMessages, ...}.java
 │  ├─ movie
 │  │  ├─ controller/MovieController.java
 │  │  ├─ dto/{MovieResult, HomeMovie, ModelAnswer}.java
-│  │  └─ service/{MovieRecommendService, MovieHomeService, MovieIndexService, MovieDetailService, MovieAutoIndexScheduler}.java
+│  │  └─ service/{MovieRecommendService, MovieCorpusManager, MovieHomeService, MovieIndexService, MovieDetailService, MovieAutoIndexScheduler}.java
 │  └─ tv
 │     ├─ controller/TvController.java
 │     ├─ dto/{TvResult, HomeTv}.java
-│     └─ service/{TvRecommendService, TvHomeService, TvIndexService, TvDetailService}.java
+│     └─ service/{TvRecommendService, TvCorpusManager, TvHomeService, TvIndexService, TvDetailService}.java
 ├─ infra
 │  ├─ kobis/KobisClient.java      (영화진흥위원회 일별 박스오피스 API)
 │  ├─ tmdb/TmdbClient.java        (TMDB 영화·TV 상세/목록/크레딧/키워드 API)

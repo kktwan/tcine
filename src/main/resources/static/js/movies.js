@@ -39,7 +39,13 @@
         updateChipMode(radio.value);
       });
     });
+    // 새 검색을 시작하면 이전 검색의 AI 코멘트·결과·안내는 숨기고, 검색이 끝나 새 화면이 열릴 때 다시 보여 준다
+    var staleSelector = '.ai-callout, .list-head, .movie-list, .movie-list-more-wrap, .toast';
+    function setStaleHidden(hidden) {
+      document.querySelectorAll(staleSelector).forEach(function (el) { el.hidden = hidden; });
+    }
     form.addEventListener('submit', function () {
+      setStaleHidden(true);
       button.disabled = true;
       label.textContent = '검색 중...';
       var loadingBox = document.getElementById('ai-loading-box');
@@ -59,6 +65,7 @@
       label.textContent = original;
       var loadingBox = document.getElementById('ai-loading-box');
       if (loadingBox) loadingBox.hidden = true;
+      setStaleHidden(false);
     });
   }
 

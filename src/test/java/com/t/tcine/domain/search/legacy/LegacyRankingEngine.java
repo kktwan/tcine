@@ -1,4 +1,6 @@
-package com.t.tcine.domain.search.util;
+package com.t.tcine.domain.search.legacy;
+
+// 리팩터링 전 구현을 그대로 보관한 기준(reference) 구현. 새 구현과 결과가 같은지 비교하는 차등 테스트에서만 쓴다.
 
 import org.springframework.ai.document.Document;
 
@@ -6,25 +8,25 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class RankingEngine {
+public class LegacyRankingEngine {
 
     public static int keywordScore(Document document, String query, boolean isTv) {
         Map<String, Object> metadata = document.getMetadata();
-        List<String> terms = QueryAnalyzer.extractCoreTerms(query);
-        Set<String> requestedNetworks = isTv ? QueryAnalyzer.extractRequestedNetworks(query) : Set.of();
+        List<String> terms = LegacyQueryAnalyzer.extractCoreTerms(query);
+        Set<String> requestedNetworks = isTv ? LegacyQueryAnalyzer.extractRequestedNetworks(query) : Set.of();
         
         if (terms.isEmpty() && requestedNetworks.isEmpty()) return 0;
         
         String fullCore = String.join("", terms);
-        String title = QueryAnalyzer.compact(str(metadata.get("title")));
-        String originalTitle = QueryAnalyzer.compact(str(metadata.get("originalTitle")));
-        String cast = QueryAnalyzer.compact(str(metadata.get("cast")));
-        String keywords = QueryAnalyzer.compact(str(metadata.getOrDefault("keywords", extractFieldFromContent(document.getText(), "키워드:"))));
-        String genres = QueryAnalyzer.compact(str(metadata.get("genres")));
-        String overview = QueryAnalyzer.compact(str(metadata.get("overview")));
+        String title = LegacyQueryAnalyzer.compact(str(metadata.get("title")));
+        String originalTitle = LegacyQueryAnalyzer.compact(str(metadata.get("originalTitle")));
+        String cast = LegacyQueryAnalyzer.compact(str(metadata.get("cast")));
+        String keywords = LegacyQueryAnalyzer.compact(str(metadata.getOrDefault("keywords", extractFieldFromContent(document.getText(), "키워드:"))));
+        String genres = LegacyQueryAnalyzer.compact(str(metadata.get("genres")));
+        String overview = LegacyQueryAnalyzer.compact(str(metadata.get("overview")));
         
-        String creatorOrDirector = QueryAnalyzer.compact(str(metadata.get(isTv ? "creator" : "director")));
-        String networks = isTv ? QueryAnalyzer.compact(str(metadata.get("networks"))) : "";
+        String creatorOrDirector = LegacyQueryAnalyzer.compact(str(metadata.get(isTv ? "creator" : "director")));
+        String networks = isTv ? LegacyQueryAnalyzer.compact(str(metadata.get("networks"))) : "";
 
         int totalScore = 0;
 
@@ -73,7 +75,7 @@ public class RankingEngine {
         
         int year = intOf(m.get("year"));
         int thisYear = LocalDate.now().getYear();
-        boolean wantsClassic = QueryAnalyzer.wantsClassic(query);
+        boolean wantsClassic = LegacyQueryAnalyzer.wantsClassic(query);
 
         double recencyBonus = 0.0;
         int recencyBaseYear = isTv ? 2005 : 1998;
@@ -131,7 +133,7 @@ public class RankingEngine {
                 alignmentBonus -= 0.08;
             }
             if (isTv && requestedNetworks != null && !requestedNetworks.isEmpty()) {
-                String networksCompact = QueryAnalyzer.compact(str(m.get("networks")));
+                String networksCompact = LegacyQueryAnalyzer.compact(str(m.get("networks")));
                 if (matchesRequestedNetworks(networksCompact, requestedNetworks)) alignmentBonus += 0.65;
                 else alignmentBonus -= 0.85;
             }
@@ -150,8 +152,8 @@ public class RankingEngine {
     public static boolean matchesRequestedGenres(Document doc, Set<String> requestedGenres, boolean isTv) {
         if (requestedGenres.isEmpty()) return true;
         Map<String, Object> m = doc.getMetadata();
-        String candGenres = QueryAnalyzer.compact(str(m.get("genres")));
-        String candKeywords = QueryAnalyzer.compact(str(m.getOrDefault("keywords", extractFieldFromContent(doc.getText(), "키워드:"))));
+        String candGenres = LegacyQueryAnalyzer.compact(str(m.get("genres")));
+        String candKeywords = LegacyQueryAnalyzer.compact(str(m.getOrDefault("keywords", extractFieldFromContent(doc.getText(), "키워드:"))));
         for (String req : requestedGenres) {
             if (candGenres.contains(req)) return true;
             if (isTv && candKeywords.contains(req)) return true;
@@ -162,8 +164,8 @@ public class RankingEngine {
 
     public static boolean hasConflictingGenre(Document doc, String query, Set<String> requestedGenres, boolean isTv) {
         if (query == null || query.isBlank()) return false;
-        String q = QueryAnalyzer.compact(query);
-        String candGenres = QueryAnalyzer.compact(str(doc.getMetadata().get("genres")));
+        String q = LegacyQueryAnalyzer.compact(query);
+        String candGenres = LegacyQueryAnalyzer.compact(str(doc.getMetadata().get("genres")));
         boolean wantsLightOrRomantic = requestedGenres.contains("로맨스") || requestedGenres.contains("가족")
                 || q.contains("달달") || q.contains("설레") || q.contains("힐링") || q.contains("따뜻") || (!isTv && q.contains("잔잔"));
         if (wantsLightOrRomantic) {
@@ -190,7 +192,7 @@ public class RankingEngine {
     }
     
     public static boolean matchesRequestedNetworks(Document doc, Set<String> requestedNetworks) {
-        return matchesRequestedNetworks(QueryAnalyzer.compact(str(doc.getMetadata().get("networks"))), requestedNetworks);
+        return matchesRequestedNetworks(LegacyQueryAnalyzer.compact(str(doc.getMetadata().get("networks"))), requestedNetworks);
     }
 
     private static boolean networkMatches(String networksCompact, String term) {

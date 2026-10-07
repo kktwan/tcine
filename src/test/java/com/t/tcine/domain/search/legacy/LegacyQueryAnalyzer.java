@@ -1,4 +1,6 @@
-package com.t.tcine.domain.search.util;
+package com.t.tcine.domain.search.legacy;
+
+// 리팩터링 전 구현을 그대로 보관한 기준(reference) 구현. 새 구현과 결과가 같은지 비교하는 차등 테스트에서만 쓴다.
 
 import org.springframework.ai.document.Document;
 
@@ -6,7 +8,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class QueryAnalyzer {
+public class LegacyQueryAnalyzer {
 
     private static final Pattern SIMILAR_QUERY_PATTERN = Pattern.compile(
             "^(.+?)\\s*(?:와|과|이랑|랑|하고)?\\s*(?:비슷한|유사한|같은|닮은|느낌의|스타일의|풍의|결의)\\s*(?:분위기의|느낌의|장르의|스타일의|결의)?\\s*(?:영화|드라마|시리즈|예능|애니|애니메이션|작품|추천.*)?$");
