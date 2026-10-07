@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>로그인 | 컨텐츠</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <!-- Cloudflare Turnstile (사이트 키가 있을 때만 불러온다) -->
+  <script th:if="${!#strings.isEmpty(turnstileSiteKey)}"
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body class="auth-body">
+  <main class="auth">
+    <div class="auth-card">
+      <div class="auth-logo"><svg class="ic"><use th:href="@{/img/icons.svg#film}"/></svg></div>
+      <h1>다시 만나서 반가워요</h1>
+      <p class="auth-sub">로그인하고 취향에 맞는 영화와 시리즈를 찾아보세요</p>
+
+      <div class="toast error" th:if="${param.error}">아이디 또는 비밀번호가 올바르지 않아요.</div>
+      <div class="toast error" th:if="${param.captcha}">사람인지 확인하지 못했어요. 잠시 후 다시 시도해 주세요.</div>
+      <div class="toast error" th:if="${param.expired}">화면을 연 지 오래됐어요. 다시 로그인해 주세요.</div>
+      <div class="toast" th:if="${param.logout}">로그아웃했어요.</div>
+      <div class="toast" th:if="${param.signup}">가입이 완료됐어요. 로그인해 주세요.</div>
+
+      <form th:action="@{/login}" method="post">
+        <div class="field">
+          <label class="label" for="username">아이디</label>
+          <input id="username" name="username" autocomplete="username" autofocus required>
+        </div>
+        <div class="field">
+          <label class="label" for="password">비밀번호</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="cf-turnstile" th:if="${!#strings.isEmpty(turnstileSiteKey)}"
+             th:attr="data-sitekey=${turnstileSiteKey}" data-size="flexible"></div>
+        <button class="btn btn-primary btn-block">로그인</button>
+        <div class="form-links">계정이 없나요? <a th:href="@{/signup}">회원가입</a></div>
+      </form>
+    </div>
+  </main>
+
+  <script th:src="@{/js/login.js}" defer></script>
+</body>
+</html>

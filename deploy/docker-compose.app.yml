@@ -1,0 +1,37 @@
+# Jenkins가 Blue-Green 무중단 배포 시 제어하는 앱 컨테이너 (tcine-blue / tcine-green)
+# 위치: /data/tcine/docker-compose.app.yml
+x-app-common: &app-common
+  image: tcine:${IMAGE_TAG:-latest}
+  restart: unless-stopped
+  env_file:
+    - .env
+  environment:
+    DB_URL: jdbc:postgresql://tcine-db:5432/tcine
+    REDIS_HOST: tcine-redis
+    REDIS_PORT: "6379"
+    QDRANT_HOST: tcine-qdrant
+    QDRANT_GRPC_PORT: "6334"
+    SPRING_THYMELEAF_CACHE: "true"
+    JAVA_TOOL_OPTIONS: "-Xms512m -Xmx2048m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+    TZ: Asia/Seoul
+  expose:
+    - "8080"
+  mem_limit: 3g
+  networks:
+    - tcine-net
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  tcine-blue:
+    <<: *app-common
+    container_name: tcine-blue
+
+  tcine-green:
+    <<: *app-common
+    container_name: tcine-green
+
+networks:
+  tcine-net:
+    external: true

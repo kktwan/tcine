@@ -1,0 +1,119 @@
+spring:
+  application:
+    name: tcine
+  ai:
+    google:
+      genai:
+        # 키가 비어 있으면 Spring AI가 시작 단계에서 실패하므로 자리표시 값을 둔다.
+        # 실제 사용 가능 여부는 아래 ai.api-key(진짜 키가 있는지)로 판단한다.
+        api-key: ${GEMINI_API_KEY:not-configured}
+        chat:
+          model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
+          # 생각하는 시간을 줄여 응답을 빠르게 한다 (MINIMAL < LOW < MEDIUM < HIGH)
+          thinking-level: ${GEMINI_THINKING_LEVEL:MINIMAL}
+          options:
+            temperature: 0.6
+    # 채팅은 Gemini, 임베딩은 OpenAI. 두 스타터가 모두 있으면 빈이 겹치므로 어느 쪽을 쓸지 정하고,
+    # 쓰지 않는 OpenAI 기능(이미지/음성/검열)은 끈다.
+    model:
+      chat: google-genai
+      embedding: openai
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    openai:
+      # 키가 비어 있으면 Spring AI가 시작 단계에서 실패할 수 있어 자리표시 값을 둔다
+      api-key: ${OPENAI_API_KEY:not-configured}
+      embedding:
+        model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+        # 벡터 크기를 줄여 저장 공간과 메모리를 아낀다 (영화·시리즈 수천 편에는 충분)
+        dimensions: 768
+    vectorstore:
+      qdrant:
+        host: ${QDRANT_HOST:localhost}
+        port: ${QDRANT_GRPC_PORT:6334}
+        api-key: ${QDRANT_API_KEY:}
+        use-tls: ${QDRANT_USE_TLS:false}
+        collection-name: ${QDRANT_COLLECTION_NAME:tcine-movies-openai}
+        # 앱 시작 때 Qdrant 연결을 요구하지 않도록 끈다. 컬렉션은 영화 색인을 시작할 때 만든다
+        initialize-schema: false
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tcine}
+    username: ${DB_USERNAME:tcine}
+    password: ${DB_PASSWORD:tcine}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  session:
+    # 기본은 redis (Blue-Green 배포 시 로그인 세션 공유). 로컬이나 테스트에서 끄려면 SESSION_STORE_TYPE=none
+    store-type: ${SESSION_STORE_TYPE:redis}
+    redis:
+      namespace: tcine:session
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  thymeleaf:
+    cache: ${SPRING_THYMELEAF_CACHE:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    # Qdrant나 메일 등이 일시 중단되어도 컨테이너 배포 헬스체크가 죽지 않도록 기본 ping/db 위주로 체크
+    redis:
+      enabled: false
+
+server:
+  # 리버스 프록시(Nginx) 뒤에서 X-Forwarded-* 헤더를 신뢰해 https 주소로 리다이렉트/URL을 만든다
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      timeout: 7d
+      # URL에 ;jsessionid=... 가 붙어 리다이렉트가 404 나는 것 방지
+      tracking-modes: cookie
+      cookie:
+        # 운영(HTTPS)에서만 true. 로컬 http 개발에서는 기본 false
+        secure: ${SESSION_COOKIE_SECURE:false}
+        http-only: true
+        same-site: lax
+
+# Cloudflare Turnstile 캡챠 (로그인/회원가입). secret-key가 비어 있으면 캡챠를 쓰지 않는다
+turnstile:
+  site-key: ${TURNSTILE_SITE_KEY:}
+  secret-key: ${TURNSTILE_SECRET_KEY:}
+
+# AI 추천 (Spring AI + Google Gemini)
+ai:
+  api-key: ${GEMINI_API_KEY:}
+  daily-limit: ${GEMINI_DAILY_LIMIT:20}
+
+# 영화·시리즈 추천: TMDB 데이터, 관리자(색인 가능한 사용자 아이디), 사용자당 하루 사용 횟수
+tmdb:
+  api-key: ${TMDB_API_KEY:}
+
+kobis:
+  api-key: ${KOBIS_API_KEY:}
+
+movie:
+  admin: ${MOVIE_ADMIN:}
+  # 매일 새벽 4시(한국 시간)에 신작/인기작을 자동으로 색인한다. 기본은 꺼짐 (운영에서만 MOVIE_AUTO_INDEX=true)
+  auto-index: ${MOVIE_AUTO_INDEX:false}
+  auto-index-cron: ${MOVIE_AUTO_INDEX_CRON:0 0 4 * * *}
+  daily-limit: ${MOVIE_DAILY_LIMIT:30}
+
+tv:
+  collection-name: ${TV_COLLECTION_NAME:tcine-tv-openai}

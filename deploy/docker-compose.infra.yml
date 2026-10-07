@@ -1,0 +1,85 @@
+# Oracle Cloud A1.Flex (4 OCPU / 24GB RAM) 상시 가동 인프라 컨테이너
+# 위치: /data/tcine/docker-compose.infra.yml
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: tcine-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/service-url.inc:/etc/nginx/conf.d/service-url.inc:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    networks:
+      - tcine-net
+
+  jenkins:
+    build: ./jenkins
+    container_name: tcine-jenkins
+    restart: unless-stopped
+    user: root
+    environment:
+      TZ: Asia/Seoul
+      JAVA_OPTS: "-Xms512m -Xmx1536m -Djenkins.install.runSetupWizard=true"
+    ports:
+      - "9090:8080"
+    volumes:
+      - ./jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /data/tcine:/data/tcine
+    networks:
+      - tcine-net
+
+  db:
+    image: postgres:17
+    container_name: tcine-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tcine
+      POSTGRES_USER: ${DB_USERNAME:-tcine}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Seoul
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
+      -c work_mem=16MB
+      -c maintenance_work_mem=128MB
+      -c max_connections=100
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    mem_limit: 2g
+    networks:
+      - tcine-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: tcine-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - ./redis_data:/data
+    mem_limit: 600m
+    networks:
+      - tcine-net
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.3
+    container_name: tcine-qdrant
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
+      TZ: Asia/Seoul
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+    mem_limit: 2g
+    networks:
+      - tcine-net
+
+networks:
+  tcine-net:
+    name: tcine-net
+    driver: bridge

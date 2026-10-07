@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>시리즈 상세 | 컨텐츠</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+  <header th:replace="~{fragments :: header('tv', null, null)}"></header>
+
+  <main class="container">
+    <a class="back-link" th:href="@{/tv}">← 시리즈 추천으로</a>
+
+    <div class="empty spaced" th:if="${tv == null}">
+      <div class="empty-ic"><svg class="ic"><use th:href="@{/img/icons.svg#compass}"/></svg></div>
+      <div>시리즈 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</div>
+    </div>
+
+    <th:block th:if="${tv != null}">
+      <section class="hero">
+        <img class="hero-bg" th:if="${tv.backdropPath != null}"
+             th:src="'https://image.tmdb.org/t/p/w1280' + ${tv.backdropPath}" alt="">
+        <div class="hero-shade"></div>
+        <div class="hero-in">
+          <div class="hero-poster">
+            <img th:if="${tv.posterPath != null}" th:src="'https://image.tmdb.org/t/p/w500' + ${tv.posterPath}"
+                 th:alt="${tv.title} + ' 포스터'">
+            <div class="poster-empty" th:unless="${tv.posterPath != null}">포스터 없음</div>
+          </div>
+          <div class="hero-text">
+            <h1 th:text="${tv.title}"></h1>
+            <p class="hero-orig" th:if="${!#strings.isEmpty(tv.originalTitle) and tv.originalTitle != tv.title}"
+               th:text="${tv.originalTitle}"></p>
+            <div class="hero-meta">
+              <span class="score" th:if="${tv.rating != null and tv.rating > 0}"
+                    th:text="'★ ' + ${#numbers.formatDecimal(tv.rating, 1, 1)}"></span>
+              <span th:if="${tv.year != null}" th:text="${tv.year}"></span>
+              <span th:if="${!#strings.isEmpty(tv.networks)}" th:text="${tv.networks}"></span>
+              <span th:if="${tv.seasons != null and tv.seasons > 0}"
+                    th:text="${tv.episodes != null and tv.episodes > 0} ? '시즌 ' + ${tv.seasons} + ' · ' + ${tv.episodes} + '부작' : '시즌 ' + ${tv.seasons}"></span>
+            </div>
+            <p class="hero-genres" th:if="${!#strings.isEmpty(tv.genres)}" th:text="${tv.genres}"></p>
+            <p class="hero-tagline" th:if="${!#strings.isEmpty(tv.tagline)}" th:text="'“' + ${tv.tagline} + '”'"></p>
+            <div class="actions">
+              <a class="btn btn-light" th:href="@{/tv(similar=${tv.id})}">이 작품과 비슷한 시리즈 찾기</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="detail-grid">
+        <section class="detail-card detail-main">
+          <h2>줄거리</h2>
+          <p class="detail-overview" th:text="${!#strings.isEmpty(tv.overview)} ? ${tv.overview} : '등록된 줄거리가 없어요.'"></p>
+        </section>
+
+        <aside class="detail-side">
+          <section class="detail-card" th:if="${!#strings.isEmpty(tv.networks)}">
+            <h2>방송 / OTT</h2>
+            <div class="pills"><span class="pill pill-strong" th:text="${tv.networks}"></span></div>
+          </section>
+          <section class="detail-card" th:if="${!#strings.isEmpty(tv.creator)}">
+            <h2>제작 / 연출</h2>
+            <div class="pills"><span class="pill pill-strong" th:text="${tv.creator}"></span></div>
+          </section>
+          <section class="detail-card" th:if="${!#lists.isEmpty(tv.cast)}">
+            <h2>출연</h2>
+            <div class="pills"><span class="pill" th:each="name : ${tv.cast}" th:text="${name}"></span></div>
+          </section>
+          <section class="detail-card" th:if="${!#lists.isEmpty(tv.keywords)}">
+            <h2>키워드</h2>
+            <div class="pills"><span class="pill pill-soft" th:each="k : ${tv.keywords}" th:text="${k}"></span></div>
+          </section>
+        </aside>
+      </div>
+    </th:block>
+
+    <p class="tmdb-credit">
+      이 서비스는 TMDB API를 사용하지만 TMDB의 보증을 받거나 인증된 것은 아닙니다.
+      시리즈 정보 출처: <a href="https://www.themoviedb.org" target="_blank" rel="noopener">The Movie Database (TMDB)</a>
+    </p>
+  </main>
+</body>
+</html>

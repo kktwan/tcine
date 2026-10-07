@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <!--
+    공통 헤더: 상단 내비게이션 + 페이지 제목 영역
+    active: 현재 메뉴(my | search | dashboard), title/subtitle: 없으면(null) 제목 영역 숨김
+  -->
+  <header th:fragment="header(active, title, subtitle)">
+    <div class="topbar">
+      <div class="topbar-in">
+        <a class="brand" th:href="@{/movies}"><span class="brand-logo"><svg class="ic"><use th:href="@{/img/icons.svg#film}"/></svg></span><span>컨텐츠</span></a>
+
+        <nav class="menu" th:if="${username != null}">
+          <a th:href="@{/movies}" th:classappend="${active == 'movies'} ? 'on'">영화</a>
+          <a th:href="@{/tv}" th:classappend="${active == 'tv'} ? 'on'">시리즈</a>
+        </nav>
+
+        <div class="user" th:if="${username != null}">
+          <span class="avatar" th:text="${#strings.toUpperCase(#strings.substring(username, 0, 1))}"></span>
+          <span class="uname" th:text="${username}"></span>
+          <form th:action="@{/logout}" method="post">
+            <button class="btn-text">로그아웃</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-head" th:if="${title != null}">
+      <div class="page-head-in">
+        <h1 th:text="${title}"></h1>
+        <p th:text="${subtitle}"></p>
+      </div>
+    </div>
+  </header>
+</body>
+</html>

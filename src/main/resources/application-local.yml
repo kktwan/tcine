@@ -1,0 +1,28 @@
+# 로컬 개발 전용 프로파일 (활성 프로파일에 local 을 지정했을 때만 적용, 서버 배포에는 영향 없음)
+spring:
+  session:
+    store-type: ${SESSION_STORE_TYPE:none}
+  thymeleaf:
+    prefix: file:src/main/resources/templates/
+    cache: false
+  web:
+    resources:
+      static-locations: file:src/main/resources/static/
+      cache:
+        period: 0
+
+# Cloudflare 공개 테스트 키: 위젯은 보이지만 항상 통과한다 (로컬에서 캡챠 흐름만 확인용, 실제 키가 아님)
+turnstile:
+  site-key: 1x00000000000000000000AA
+  secret-key: 1x0000000000000000000000000000000AA
+
+logging:
+  level:
+    com.t.tcine: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+    org.springframework.web: DEBUG
+    org.springframework.web.client: DEBUG
+    org.springframework.security: INFO
+  pattern:
+    console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr(%-35.35logger{34}){cyan} : %m%n%wEx"

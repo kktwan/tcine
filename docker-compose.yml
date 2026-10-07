@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:17
+    container_name: tcine-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tcine
+      POSTGRES_USER: ${DB_USERNAME:-tcine}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tcine}
+      TZ: Asia/Seoul
+    ports:
+      - "5433:5432"
+    volumes:
+      - tcine-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-tcine} -d tcine"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: tcine-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - tcine-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.3
+    container_name: tcine-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - tcine-qdrant-data:/qdrant/storage
+
+  app:
+    build: .
+    container_name: tcine-app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/tcine
+      DB_USERNAME: ${DB_USERNAME:-tcine}
+      DB_PASSWORD: ${DB_PASSWORD:-tcine}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      QDRANT_HOST: qdrant
+      QDRANT_GRPC_PORT: "6334"
+      TZ: Asia/Seoul
+    ports:
+      - "8080:8080"
+
+volumes:
+  tcine-db-data:
+  tcine-redis-data:
+  tcine-qdrant-data:

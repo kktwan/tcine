@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>회원가입 | 컨텐츠</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <!-- Cloudflare Turnstile (사이트 키가 있을 때만 불러온다) -->
+  <script th:if="${!#strings.isEmpty(turnstileSiteKey)}"
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body class="auth-body">
+  <main class="auth">
+    <div class="auth-card">
+      <div class="auth-logo"><svg class="ic"><use th:href="@{/img/icons.svg#film}"/></svg></div>
+      <h1>영화·시리즈 추천을 시작해요</h1>
+      <p class="auth-sub">아이디와 비밀번호만 있으면 돼요</p>
+
+      <div class="toast error" th:if="${error}" th:text="${error}"></div>
+
+      <form th:action="@{/signup}" method="post" id="signup-form">
+        <div class="field">
+          <label class="label" for="username">아이디</label>
+          <input id="username" name="username" th:value="${formUsername}" autocomplete="username"
+                 minlength="4" maxlength="20" pattern="[A-Za-z0-9_]{4,20}"
+                 title="영문, 숫자, _ 로 4~20자" autofocus required>
+          <span class="hint">영문, 숫자, _ 로 4~20자</span>
+        </div>
+
+        <div class="field">
+          <label class="label" for="password">비밀번호</label>
+          <input id="password" name="password" type="password" autocomplete="new-password" maxlength="64" required>
+          <div class="meter"><i id="meter"></i></div>
+          <ul class="rules" id="rules">
+            <li data-rule="kinds">영문 대/소문자, 숫자, 특수문자 중 2종류 이상</li>
+            <li data-rule="length">3종류 이상이면 8자 이상, 2종류면 10자 이상</li>
+            <li data-rule="space">공백 없이 64자 이하</li>
+            <li data-rule="pattern">같은 문자 3연속, abcd·1234 같은 연속 4자 없음</li>
+            <li data-rule="username">아이디를 포함하지 않음</li>
+          </ul>
+        </div>
+
+        <div class="field">
+          <label class="label" for="passwordConfirm">비밀번호 확인</label>
+          <input id="passwordConfirm" name="passwordConfirm" type="password" autocomplete="new-password" maxlength="64" required>
+          <span class="hint" id="confirm-hint"></span>
+        </div>
+
+        <div class="cf-turnstile" th:if="${!#strings.isEmpty(turnstileSiteKey)}"
+             th:attr="data-sitekey=${turnstileSiteKey}" data-size="flexible"></div>
+        <button class="btn btn-primary btn-block">가입하기</button>
+        <div class="form-links">이미 계정이 있나요? <a th:href="@{/login}">로그인</a></div>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      const form = document.getElementById('signup-form');
+      const user = document.getElementById('username');
+      const pw = document.getElementById('password');
+      const pw2 = document.getElementById('passwordConfirm');
+      const meter = document.getElementById('meter');
+      const hint = document.getElementById('confirm-hint');
+      const items = {};
+      document.querySelectorAll('#rules li').forEach(li => items[li.dataset.rule] = li);
+
+      // 서버(PasswordPolicy)와 같은 기준으로 화면에서 미리 안내한다. 최종 검증은 서버가 한다.
+      function kinds(p) {
+        return (/[A-Z]/.test(p) ? 1 : 0) + (/[a-z]/.test(p) ? 1 : 0) + (/[0-9]/.test(p) ? 1 : 0) + (/[^A-Za-z0-9]/.test(p) ? 1 : 0);
+      }
+      function repeated(p) { return /(.)\1\1/.test(p); }
+      function sequence(p) {
+        const s = p.toLowerCase(); let up = 1, down = 1;
+        for (let i = 1; i < s.length; i++) {
+          const a = s.charCodeAt(i - 1), b = s.charCodeAt(i);
+          const same = (/[0-9]/.test(s[i]) && /[0-9]/.test(s[i - 1])) || (/[a-z]/.test(s[i]) && /[a-z]/.test(s[i - 1]));
+          up = same && b - a === 1 ? up + 1 : 1;
+          down = same && a - b === 1 ? down + 1 : 1;
+          if (up >= 4 || down >= 4) return true;
+        }
+        return false;
+      }
+
+      function check() {
+        const p = pw.value, u = user.value.toLowerCase();
+        const k = kinds(p);
+        const res = {
+          kinds: k >= 2,
+          length: k >= 2 && p.length >= (k >= 3 ? 8 : 10),
+          space: p.length > 0 && p.length <= 64 && !/\s/.test(p),
+          pattern: p.length > 0 && !repeated(p) && !sequence(p),
+          username: p.length > 0 && !(u.length >= 3 && p.toLowerCase().includes(u))
+        };
+        let passed = 0;
+        Object.keys(res).forEach(key => {
+          items[key].classList.toggle('ok', res[key]);
+          if (res[key]) passed++;
+        });
+        // 강도 표시는 CSS(data-level)가 처리한다 (0~5)
+        meter.dataset.level = p.length ? passed : 0;
+
+        if (!pw2.value) { hint.textContent = ''; hint.className = 'hint'; }
+        else if (pw.value === pw2.value) { hint.textContent = '비밀번호가 일치해요'; hint.className = 'hint good'; }
+        else { hint.textContent = '비밀번호가 일치하지 않아요'; hint.className = 'hint bad'; }
+      }
+      [user, pw, pw2].forEach(el => el.addEventListener('input', check));
+      check();
+
+      // Enter로 제출할 때 버튼 클릭(Shift/Ctrl 조합 시 새 창)을 거치지 않고 같은 창에서 바로 제출
+      form.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+          e.preventDefault();
+          this.requestSubmit();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

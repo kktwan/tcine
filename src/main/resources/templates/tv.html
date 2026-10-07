@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>시리즈 추천 | 컨텐츠</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+  <header th:replace="~{fragments :: header('tv', '시리즈 추천', '드라마·예능·애니메이션 중 보고 싶은 분위기나 배우·OTT를 말해보세요')}"></header>
+
+  <main class="container">
+    <form class="panel movie-search-panel" method="get" th:action="@{/tv}" id="movie-form">
+      <div class="search-row">
+        <input name="q" th:value="${q}" maxlength="150" required autofocus aria-label="시리즈 검색어"
+               placeholder="예: 넷플릭스 스릴러 드라마, 김은숙 작가 작품, 슬기로운 의사생활과 비슷한 시리즈">
+        <button class="btn btn-primary" id="movie-btn"><span class="label-text">검색</span></button>
+      </div>
+      <span class="near-note" th:if="${!aiEnabled}">AI가 아직 설정되지 않았어요. (서버에 GEMINI_API_KEY가 필요해요)</span>
+    </form>
+
+    <div class="toast" th:if="${message}" th:text="${message}"></div>
+    <div class="toast error" th:if="${result != null and result.message != null and !result.hasCards()}" th:text="${result.message}"></div>
+    <div class="toast" th:if="${result != null and result.message != null and result.hasCards()}" th:text="${result.message}"></div>
+
+    <!-- 검색 전: 1. 한국 시리즈 최신작 / 2. 한국 대표 인기 드라마·예능 / 3. 오늘의 인기 시리즈 -->
+    <section class="home-section" th:if="${koreanNow != null and !#lists.isEmpty(koreanNow)}">
+      <h2 class="home-title">한국 시리즈 최신작</h2>
+      <div class="poster-row">
+        <a class="poster-item" th:each="s : ${koreanNow}" th:href="@{/tv/{id}(id=${s.id})}" th:title="${s.title} + ' 상세 보기'">
+          <span class="poster-wrap">
+            <img th:src="${s.posterUrl}" th:alt="${s.title} + ' 포스터'" loading="lazy">
+            <span class="net-badge" th:if="${!#strings.isEmpty(s.network)}" th:attr="data-net=${s.network}" th:text="${s.network}"></span>
+            <span class="rate-badge" th:if="${s.rating != null}" th:text="'★ ' + ${#numbers.formatDecimal(s.rating, 1, 1)}"></span>
+          </span>
+          <span class="pt" th:text="${s.title}"></span>
+          <span class="pm" th:text="${s.year != null and !#strings.isEmpty(s.network)} ? ${s.year} + ' · ' + ${s.network} : (${s.year != null} ? ${s.year} : ${s.network})"></span>
+        </a>
+      </div>
+    </section>
+
+    <section class="home-section" th:if="${koreanPopular != null and !#lists.isEmpty(koreanPopular)}">
+      <h2 class="home-title">한국 대표 인기 드라마·예능</h2>
+      <div class="poster-row">
+        <a class="poster-item" th:each="s : ${koreanPopular}" th:href="@{/tv/{id}(id=${s.id})}" th:title="${s.title} + ' 상세 보기'">
+          <span class="poster-wrap">
+            <img th:src="${s.posterUrl}" th:alt="${s.title} + ' 포스터'" loading="lazy">
+            <span class="net-badge" th:if="${!#strings.isEmpty(s.network)}" th:attr="data-net=${s.network}" th:text="${s.network}"></span>
+            <span class="rate-badge" th:if="${s.rating != null}" th:text="'★ ' + ${#numbers.formatDecimal(s.rating, 1, 1)}"></span>
+          </span>
+          <span class="pt" th:text="${s.title}"></span>
+          <span class="pm" th:text="${s.year != null and !#strings.isEmpty(s.network)} ? ${s.year} + ' · ' + ${s.network} : (${s.year != null} ? ${s.year} : ${s.network})"></span>
+        </a>
+      </div>
+    </section>
+
+    <section class="home-section" th:if="${trending != null and !#lists.isEmpty(trending)}">
+      <h2 class="home-title">오늘의 인기 시리즈</h2>
+      <div class="poster-row">
+        <a class="poster-item" th:each="s : ${trending}" th:href="@{/tv/{id}(id=${s.id})}" th:title="${s.title} + ' 상세 보기'">
+          <span class="poster-wrap">
+            <img th:src="${s.posterUrl}" th:alt="${s.title} + ' 포스터'" loading="lazy">
+            <span class="net-badge" th:if="${!#strings.isEmpty(s.network)}" th:attr="data-net=${s.network}" th:text="${s.network}"></span>
+            <span class="rate-badge" th:if="${s.rating != null}" th:text="'★ ' + ${#numbers.formatDecimal(s.rating, 1, 1)}"></span>
+          </span>
+          <span class="pt" th:text="${s.title}"></span>
+          <span class="pm" th:text="${s.year != null and !#strings.isEmpty(s.network)} ? ${s.year} + ' · ' + ${s.network} : (${s.year != null} ? ${s.year} : ${s.network})"></span>
+        </a>
+      </div>
+    </section>
+
+    <p class="ai-summary" th:if="${result != null and result.summary != null}" th:text="${result.summary}"></p>
+
+    <th:block th:if="${result != null and result.hasCards()}">
+      <div class="list-head">
+        <h2>검색 결과</h2>
+        <span class="count" th:text="${#lists.size(result.cards)} + '편'"></span>
+        <span class="note" th:if="${result.ai}">AI 하이브리드 검색</span>
+      </div>
+
+      <div class="movie-list">
+        <article class="card movie-card" th:each="c : ${result.cards}">
+          <a class="poster" th:href="@{/tv/{id}(id=${c.id})}" th:title="${c.title} + ' 상세 보기'">
+            <img th:if="${c.posterUrl != null}" th:src="${c.posterUrl}" th:alt="${c.title} + ' 포스터'" loading="lazy">
+            <span class="poster-empty" th:unless="${c.posterUrl != null}">포스터 없음</span>
+          </a>
+          <div class="movie-body">
+            <h3><a th:href="@{/tv/{id}(id=${c.id})}" th:text="${c.title}"></a></h3>
+            <div class="chips">
+              <span class="tag" th:if="${c.year != null}" th:text="${c.year}"></span>
+              <span class="tag region" th:if="${!#strings.isEmpty(c.networks)}" th:text="${c.networks}"></span>
+              <span class="tag region" th:if="${c.seasons != null and c.seasons > 0}"
+                    th:text="${c.episodes != null and c.episodes > 0} ? '시즌 ' + ${c.seasons} + ' · ' + ${c.episodes} + '부작' : '시즌 ' + ${c.seasons}"></span>
+              <span class="tag region" th:if="${!#strings.isEmpty(c.genres)}" th:text="${c.genres}"></span>
+              <span class="tag visited" th:if="${c.rating != null and c.rating > 0}"
+                    th:text="'★ ' + ${#numbers.formatDecimal(c.rating, 1, 1)}"></span>
+            </div>
+            <p class="movie-staff" th:if="${!#strings.isEmpty(c.creator) or !#strings.isEmpty(c.cast)}">
+              <span th:if="${!#strings.isEmpty(c.creator)}" th:text="'제작 ' + ${c.creator}"></span>
+              <span th:if="${!#strings.isEmpty(c.cast)}" th:text="'출연 ' + ${c.cast}"></span>
+            </p>
+            <p class="reason" th:if="${c.reason != null}" th:text="${c.reason}"></p>
+            <p class="overview" th:if="${!#strings.isEmpty(c.overview)}" th:text="${c.overview}" th:title="${c.overview}"></p>
+            <button type="button" class="more-btn" th:if="${!#strings.isEmpty(c.overview)}" hidden>줄거리 더보기</button>
+          </div>
+        </article>
+      </div>
+    </th:block>
+
+    <!-- 관리자: TMDB에서 TV 시리즈(드라마·예능·애니)를 가져와 Qdrant(yummy-tv-openai)에 쌓는다 -->
+    <section class="panel admin-box" th:if="${isAdmin}">
+      <div class="label">관리자 · 시리즈(드라마·예능·애니) 데이터 쌓기</div>
+      <p class="near-note">
+        지금 색인된 시리즈:
+        <strong th:text="${indexedCount >= 0} ? ${indexedCount} + '편' : '시리즈 저장소에 연결할 수 없어요'"></strong>
+      </p>
+      <form method="post" th:action="@{/tv/index}" class="edit-row">
+        <select name="pages" aria-label="가져올 쪽 수">
+          <option value="5">목록별 5쪽 (최대 약 700편, 중복 제외 전)</option>
+          <option value="10" selected>목록별 10쪽 (최대 약 1,400편, 중복 제외 전)</option>
+          <option value="25">목록별 25쪽 (최대 약 3,500편, 중복 제외 전)</option>
+          <option value="50">목록별 50쪽 (최대 약 7,000편, 중복 제외 전)</option>
+          <option value="100">목록별 100쪽 (최대 약 14,000편, 오래 걸림)</option>
+        </select>
+        <button class="btn btn-ghost">색인 시작</button>
+      </form>
+      <p class="near-note" id="index-status" data-status-url="/tv/index-status"
+         th:attr="data-running=${indexStatus.running}"
+         th:text="${indexStatus.message}"></p>
+    </section>
+
+    <p class="tmdb-credit">
+      이 서비스는 TMDB API를 사용하지만 TMDB의 보증을 받거나 인증된 것은 아닙니다.
+      시리즈 정보 출처: <a href="https://www.themoviedb.org" target="_blank" rel="noopener">The Movie Database (TMDB)</a>
+    </p>
+  </main>
+
+  <script th:src="@{/js/movies.js}" defer></script>
+</body>
+</html>
