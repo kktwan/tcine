@@ -647,22 +647,60 @@ details.edit form { display: grid; gap: 10px; margin-top: 12px; }
 .net-badge {
   position: absolute; right: 7px; top: 7px;
   padding: 2px 8px; border-radius: 999px;
-  background: rgba(18, 18, 22, .76); color: #fff;
+  background: rgba(18, 18, 22, .78); color: #fff;
   backdrop-filter: blur(6px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, .26), inset 0 0 0 1px rgba(255, 255, 255, .14);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .28), inset 0 0 0 1px rgba(255, 255, 255, .14);
   font-size: .68rem; font-weight: 800; line-height: 1.35; letter-spacing: -0.01em;
 }
-.net-badge[data-net="Netflix"], .net-badge[data-net="NETFLIX"], .net-badge[data-net="넷플릭스"] { background: rgba(229, 9, 20, .92); }
-.net-badge[data-net="TVING"], .net-badge[data-net="티빙"] { background: rgba(255, 21, 60, .92); }
-.net-badge[data-net="Disney+"], .net-badge[data-net="디즈니+"] { background: rgba(0, 82, 204, .92); }
-.net-badge[data-net="Wavve"], .net-badge[data-net="웨이브"] { background: rgba(19, 81, 249, .92); }
-.net-badge[data-net="Coupang Play"], .net-badge[data-net="쿠팡플레이"] { background: rgba(0, 149, 217, .92); }
-.net-badge[data-net="Watcha"], .net-badge[data-net="WATCHA"], .net-badge[data-net="왓챠"] { background: rgba(255, 5, 88, .92); }
-.net-badge[data-net="Prime Video"], .net-badge[data-net="프라임비디오"] { background: rgba(0, 168, 225, .92); }
-.net-badge[data-net="Apple TV+"] { background: rgba(28, 28, 30, .88); }
 .net-badge[data-net="tvN"] { background: rgba(214, 18, 36, .88); }
 .net-badge[data-net="ENA"] { background: rgba(67, 56, 202, .88); }
 .net-badge[data-net="JTBC"] { background: rgba(124, 58, 237, .86); }
+.net-badge[data-net="Apple TV+"] { background: rgba(28, 28, 30, .88); }
+.net-badge[data-net="Prime Video"], .net-badge[data-net="프라임비디오"] { background: rgba(0, 168, 225, .92); }
+
+/* 6대 주요 OTT(Netflix, TVING, Coupang Play, Wavve, Disney+, Watcha)는 원형 심볼 로고 배지로 표시 */
+.net-badge[data-net="Netflix"], .net-badge[data-net="NETFLIX"], .net-badge[data-net="넷플릭스"],
+.net-badge[data-net="TVING"], .net-badge[data-net="티빙"],
+.net-badge[data-net="Coupang Play"], .net-badge[data-net="쿠팡플레이"],
+.net-badge[data-net="Wavve"], .net-badge[data-net="웨이브"],
+.net-badge[data-net="Disney+"], .net-badge[data-net="디즈니+"],
+.net-badge[data-net="Watcha"], .net-badge[data-net="WATCHA"], .net-badge[data-net="왓챠"] {
+  width: 28px; height: 28px; padding: 0; border-radius: 50%;
+  font-size: 0; color: transparent; overflow: hidden;
+  backdrop-filter: none;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .15);
+}
+/* Netflix: 검은 원 + 붉은 N 리본 */
+.net-badge[data-net="Netflix"], .net-badge[data-net="NETFLIX"], .net-badge[data-net="넷플릭스"] {
+  background-color: #000;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%23000'/%3E%3Cpath d='M11.5 8.5h4v19h-4zM20.5 8.5h4v19h-4z' fill='%23b1060f'/%3E%3Cpath d='M11.5 8.5h4.1l8.9 19h-4.1z' fill='%23e50914'/%3E%3C/svg%3E");
+}
+/* TVING: 다홍/레드 원 + TV 심볼 */
+.net-badge[data-net="TVING"], .net-badge[data-net="티빙"] {
+  background-color: #ff153c;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%23ff153c'/%3E%3Cpath d='M8.5 12h10.5v3.6h-3.4v10.4h-3.8V15.6H8.5z' fill='%23111'/%3E%3Cpath d='M18.2 12h4l2 8.2L26.2 12h3.8l-4.2 14h-3.6z' fill='%23fff'/%3E%3C/svg%3E");
+}
+/* Coupang Play: 흰 원 + 컬러 그라데이션 플레이 심볼 */
+.net-badge[data-net="Coupang Play"], .net-badge[data-net="쿠팡플레이"] {
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cdefs%3E%3ClinearGradient id='cp1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2300c8ff'/%3E%3Cstop offset='52%25' stop-color='%236c47ff'/%3E%3Cstop offset='100%25' stop-color='%23ff3b6b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='18' cy='18' r='18' fill='%23ffffff'/%3E%3Cpath d='M13.2 9.8c0-1.3 1.4-2.1 2.5-1.4l11.6 7.4c1 .6 1 2.1 0 2.8l-11.6 7.4c-1.1.7-2.5-.1-2.5-1.4V9.8z' fill='url(%23cp1)'/%3E%3C/svg%3E");
+}
+/* Wavve: 블루 원 + 흰색 W 웨이브 심볼 */
+.net-badge[data-net="Wavve"], .net-badge[data-net="웨이브"] {
+  background-color: #0050ff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%230050ff'/%3E%3Cpath d='M7.8 12.2h3.7l2.6 8.3 2.5-8.3h3.2l2.5 8.3 2.6-8.3h3.7l-4.5 12.6h-3.4l-2.5-7.6-2.5 7.6h-3.4z' fill='%23fff'/%3E%3C/svg%3E");
+}
+/* Disney+: 딥틸 그라데이션 원 + 아크 & Disney+ 표기 */
+.net-badge[data-net="Disney+"], .net-badge[data-net="디즈니+"] {
+  background-color: #062f44;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cdefs%3E%3ClinearGradient id='dp' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23041b29'/%3E%3Cstop offset='100%25' stop-color='%230b8394'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='18' cy='18' r='18' fill='url(%23dp)'/%3E%3Cpath d='M10 15.5c3.5-4.8 11.5-5.2 15.8-1' fill='none' stroke='%237ce8f5' stroke-width='1.5' stroke-linecap='round'/%3E%3Ctext x='18' y='22.5' text-anchor='middle' fill='%23fff' font-family='Arial,sans-serif' font-weight='900' font-size='7.5' letter-spacing='-0.3'%3EDisney+%3C/text%3E%3C/svg%3E");
+}
+/* Watcha: 검은 원 + 핑크 W 심볼 */
+.net-badge[data-net="Watcha"], .net-badge[data-net="WATCHA"], .net-badge[data-net="왓챠"] {
+  background-color: #08080a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%2308080a'/%3E%3Cpath d='M8.2 11.8h3.8l2.4 8.6 2.3-8.6h3l2.3 8.6 2.4-8.6h3.8l-4.3 13.2h-3.5l-2.2-7.8-2.2 7.8h-3.5z' fill='%23ff0558'/%3E%3C/svg%3E");
+}
 
 /* 영화 상세 */
 .back-link { display: inline-block; margin-bottom: 14px; font-size: .88rem; font-weight: 600; color: var(--muted); text-decoration: none; }

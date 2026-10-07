@@ -79,9 +79,9 @@ public class MovieRecommendService {
             - (시대성·대중성·완성도 공통 기준)
               1) 사용자가 '고전', '옛날 영화', '80~90년대'를 명시하지 않은 이상, 지나치게 오래된(1970~90년대) 낯선 영화보다 2000년대 이후~최신작 중 평점과 대중성이 검증된 웰메이드 작품을 우선 선정한다.
 
-            [3. summary 및 reason 작성 기준 (간결하고 핵심적인 큐레이션)]
-            - summary: 어떤 세계관·분위기·장르적 쾌감을 기준으로 엄선했는지 1~2문장(80자 내외)으로 명확하게 요약한다.
-            - reason: "장르가 비슷해서" 같은 상투적인 표현을 금한다. 각 영화의 고유한 소재·세계관·서사적 매력이 요청과 어떻게 연결되는지 핵심만 짚어 35~55자 내외의 간결한 한 문장으로 빠르게 작성한다.
+            [3. summary 및 reason 작성 기준 (초고속·간결 큐레이션)]
+            - summary: 어떤 세계관·분위기·장르적 쾌감을 기준으로 엄선했는지 1문장(50자 이내)으로 핵심만 요약한다.
+            - reason: "장르가 비슷해서" 같은 상투적인 표현을 금한다. 각 영화의 고유한 소재·세계관·서사적 매력이 요청과 어떻게 맞닿는지 20~32자 내외의 짧은 한 줄로 빠르게 작성한다.
             """;
 
     /** "OO와 비슷한/같은/느낌의 영화" 형태에서 기준 영화 제목("OO")을 추출하기 위한 패턴 */
@@ -108,7 +108,7 @@ public class MovieRecommendService {
     );
 
     /** AI에게 전달할 정제된 후보 수 */
-    private static final int CANDIDATES = 24;
+    private static final int CANDIDATES = 20;
     /** 하이브리드 검색으로 1차 수집할 후보 수 */
     private static final int FETCH = 60;
     private static final double RECENCY_WEIGHT = 0.18;
@@ -986,16 +986,16 @@ public class MovieRecommendService {
             Document doc = e.getValue();
             Map<String, Object> m = doc.getMetadata();
             String keywords = str(m.getOrDefault("keywords", extractFieldFromContent(doc.getText(), "키워드:")));
-            sb.append(e.getKey()).append(" | ").append(str(m.get("title")))
-                    .append(" | ").append(intOf(m.get("year")))
-                    .append(" | 감독 ").append(str(m.get("director")))
-                    .append(" | 출연 ").append(shorten(str(m.get("cast")), 45))
-                    .append(" | 장르 ").append(str(m.get("genres")));
+            sb.append(e.getKey()).append('|').append(str(m.get("title")))
+                    .append('|').append(intOf(m.get("year")))
+                    .append('|').append(str(m.get("director")))
+                    .append('|').append(shorten(str(m.get("cast")), 28))
+                    .append('|').append(str(m.get("genres")));
             if (!keywords.isBlank()) {
-                sb.append(" | 키워드 ").append(shorten(keywords, 60));
+                sb.append('|').append(shorten(keywords, 40));
             }
-            sb.append(" | 평점 ").append(String.format("%.1f", doubleOf(m.get("rating"))))
-                    .append(" | ").append(shorten(str(m.get("overview")), 110)).append('\n');
+            sb.append('|').append(String.format("%.1f", doubleOf(m.get("rating"))))
+                    .append('|').append(shorten(str(m.get("overview")), 75)).append('\n');
         }
         return chatClient.prompt().system(SYSTEM_PROMPT).user(sb.toString()).call().entity(ModelAnswer.class);
     }

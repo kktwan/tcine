@@ -79,9 +79,9 @@ public class TvRecommendService {
             - (시대성·대중성·완성도 공통 기준)
               1) 사용자가 '고전', '옛날 드라마', '90년대'를 명시하지 않은 이상, 지나치게 오래된 작품보다 최근 방영작 및 평점과 대중성이 검증된 웰메이드 시리즈를 우선 선정한다.
 
-            [3. summary 및 reason 작성 기준 (간결하고 핵심적인 큐레이션)]
-            - summary: 어떤 세계관·분위기·서사적 재미를 기준으로 시리즈들을 엄선했는지 1~2문장(80자 내외)으로 명확하게 요약한다.
-            - reason: "장르가 비슷해서" 같은 상투적인 표현을 금한다. 각 시리즈의 고유한 소재·세계관·캐릭터 매력이 요청과 어떻게 연결되는지 핵심만 짚어 35~55자 내외의 간결한 한 문장으로 빠르게 작성한다.
+            [3. summary 및 reason 작성 기준 (초고속·간결 큐레이션)]
+            - summary: 어떤 세계관·분위기·서사적 재미를 기준으로 시리즈들을 엄선했는지 1문장(50자 이내)으로 핵심만 요약한다.
+            - reason: "장르가 비슷해서" 같은 상투적인 표현을 금한다. 각 시리즈의 고유한 소재·세계관·캐릭터 매력이 요청과 어떻게 맞닿는지 20~32자 내외의 짧은 한 줄로 빠르게 작성한다.
             """;
 
     private static final Pattern SIMILAR_QUERY_PATTERN = Pattern.compile(
@@ -104,7 +104,7 @@ public class TvRecommendService {
             "데이", "보이", "토이", "조이", "에세이", "멜로", "솔로", "히어로", "티비", "비디오"
     );
 
-    private static final int CANDIDATES = 24;
+    private static final int CANDIDATES = 20;
     private static final int FETCH = 60;
     private static final double RECENCY_WEIGHT = 0.18;
     private static final double RATING_WEIGHT = 0.09;
@@ -1039,17 +1039,17 @@ public class TvRecommendService {
             Document doc = e.getValue();
             Map<String, Object> m = doc.getMetadata();
             String keywords = str(m.getOrDefault("keywords", extractFieldFromContent(doc.getText(), "키워드:")));
-            sb.append(e.getKey()).append(" | ").append(str(m.get("title")))
-                    .append(" | ").append(intOf(m.get("year")))
-                    .append(" | 방송/OTT ").append(str(m.get("networks")))
-                    .append(" | 제작 ").append(str(m.get("creator")))
-                    .append(" | 출연 ").append(shorten(str(m.get("cast")), 45))
-                    .append(" | 장르 ").append(str(m.get("genres")));
+            sb.append(e.getKey()).append('|').append(str(m.get("title")))
+                    .append('|').append(intOf(m.get("year")))
+                    .append('|').append(str(m.get("networks")))
+                    .append('|').append(str(m.get("creator")))
+                    .append('|').append(shorten(str(m.get("cast")), 28))
+                    .append('|').append(str(m.get("genres")));
             if (!keywords.isBlank()) {
-                sb.append(" | 키워드 ").append(shorten(keywords, 60));
+                sb.append('|').append(shorten(keywords, 40));
             }
-            sb.append(" | 평점 ").append(String.format("%.1f", doubleOf(m.get("rating"))))
-                    .append(" | ").append(shorten(str(m.get("overview")), 110)).append('\n');
+            sb.append('|').append(String.format("%.1f", doubleOf(m.get("rating"))))
+                    .append('|').append(shorten(str(m.get("overview")), 75)).append('\n');
         }
         return chatClient.prompt().system(SYSTEM_PROMPT).user(sb.toString()).call().entity(ModelAnswer.class);
     }

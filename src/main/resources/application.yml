@@ -11,7 +11,7 @@ spring:
         # 실제 사용 가능 여부는 아래 ai.api-key(진짜 키가 있는지)로 판단한다.
         api-key: ${GEMINI_API_KEY:not-configured}
         chat:
-          model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
+          model: ${GEMINI_MODEL:gemini-3.1-flash-lite-preview}
           # 생각하는 시간을 줄여 응답을 빠르게 한다 (MINIMAL < LOW < MEDIUM < HIGH)
           thinking-level: ${GEMINI_THINKING_LEVEL:MINIMAL}
           temperature: 0.3
@@ -67,6 +67,14 @@ spring:
         format_sql: true
   thymeleaf:
     cache: ${SPRING_THYMELEAF_CACHE:false}
+  web:
+    resources:
+      # 배포 후 강력 새로고침(Ctrl+Shift+R) 없이도 수정된 CSS/JS/이미지가 즉시 반영되도록 파일 내용 해시(MD5)를 URL에 자동 부여
+      chain:
+        strategy:
+          content:
+            enabled: true
+            paths: /**
 
 management:
   endpoints:
