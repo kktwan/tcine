@@ -81,10 +81,10 @@ deploy/
 ### 2. 브랜치 전략 및 배포 파이프라인 (`Jenkinsfile`)
 
 ```text
-feature/* (기능 개발) ──Merge──> main (소스 통합) ──Merge──> prod (운영 배포 브랜치)
-                                                               │
-                                                Jenkins Build (https://tjenkins.duckdns.org)
-                                                               ▼
+feature/* (기능 개발) ──Merge──> prod (소스 통합 & 운영 배포) ──Merge──> main (검증 완료 최종 머지)
+                                        │
+                         Jenkins Build (https://tjenkins.duckdns.org)
+                                        ▼
                         1. Git Checkout (기본: prod 브랜치)
                         2. Docker Image Build (tcine:prod-N, 최근 3개 이미지 유지)
                         3. 비활성 슬롯(tcine-blue 또는 tcine-green) 컨테이너 기동
