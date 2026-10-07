@@ -12,7 +12,7 @@
   <main class="container">
     <form class="panel movie-search-panel" method="get" th:action="@{/tv}" id="movie-form">
       <div class="search-row">
-        <input name="q" th:value="${q}" maxlength="150" required autofocus aria-label="시리즈 검색어"
+        <input name="q" th:value="${q}" maxlength="150" required aria-label="시리즈 검색어"
                placeholder="예: 넷플릭스 스릴러 드라마, 김은숙 작가 작품, 슬기로운 의사생활과 비슷한 시리즈">
         <button class="btn btn-primary" id="movie-btn" aria-label="검색">
           <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
