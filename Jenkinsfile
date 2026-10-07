@@ -6,47 +6,21 @@ pipeline {
     }
 
     parameters {
-        string(
-            name: 'GIT_BRANCH',
-            defaultValue: 'main',
-            description: '배포할 Git 브랜치 (기본: main)'
-        )
         booleanParam(
             name: 'ROLLBACK',
             defaultValue: false,
-            description: '이전 버전 롤백 여부 (체크 시 빌드 없이 ROLLBACK_TAG 이미지로 즉시 무중단 롤백)'
+            description: '이전 버전 롤백 여부 (체크 시 빌드 없이 이전 이미지로 즉시 무중단 롤백)'
         )
-        reactiveChoice(
+        string(
             name: 'ROLLBACK_TAG',
-            description: '롤백할 Docker 이미지 태그 - ROLLBACK 체크 시 필수',
-            choiceType: 'PT_SINGLE_SELECT',
-            referencedParameters: 'ROLLBACK',
-            script: [
-                $class: 'GroovyScript',
-                script: [
-                    classpath: [],
-                    sandbox: false,
-                    script: '''
-                        def tags = "docker images tcine --format {{.Tag}}".execute().text.trim().split("\\n")
-                        return tags.findAll { it.startsWith("prod-") }.sort { a, b ->
-                            def aNum = a.replaceAll("[^0-9]", "").toInteger()
-                            def bNum = b.replaceAll("[^0-9]", "").toInteger()
-                            bNum <=> aNum
-                        }
-                    '''
-                ],
-                fallbackScript: [
-                    classpath: [],
-                    sandbox: false,
-                    script: 'return ["태그 조회 실패"]'
-                ]
-            ]
+            defaultValue: '',
+            description: '롤백할 Docker 이미지 태그 (예: prod-1). 비워두면 직전 빌드 이미지로 자동 롤백합니다.'
         )
     }
 
     environment {
-        SERVICE_NAME   = "tcine"
-        DEPLOY_DIR     = "/data/tcine"
+        SERVICE_NAME    = "tcine"
+        DEPLOY_DIR      = "/data/tcine"
         NGINX_CONTAINER = "tcine-nginx"
     }
 
@@ -62,10 +36,18 @@ pipeline {
             when { expression { params.ROLLBACK == true } }
             steps {
                 script {
-                    if (!params.ROLLBACK_TAG?.trim()) {
-                        error "❌ ROLLBACK_TAG를 선택하세요 (예: prod-12)"
+                    def targetTag = params.ROLLBACK_TAG?.trim()
+                    if (!targetTag) {
+                        // 비워둔 경우 현재 떠 있는 이미지 바로 직전의 prod-* 태그를 자동 선택
+                        targetTag = sh(
+                            script: "docker images ${SERVICE_NAME} --format '{{.Tag}}' | grep '^prod-' | sort -t'-' -k2 -nr | sed -n '2p'",
+                            returnStdout: true
+                        ).trim()
                     }
-                    env.DOCKER_TAG = params.ROLLBACK_TAG.trim()
+                    if (!targetTag) {
+                        error "❌ 롤백할 이전 이미지 태그(prod-*)를 찾을 수 없습니다."
+                    }
+                    env.DOCKER_TAG = targetTag
                     sh "docker tag ${SERVICE_NAME}:${env.DOCKER_TAG} ${SERVICE_NAME}:latest"
                     echo "✅ 롤백 이미지 준비 완료: ${SERVICE_NAME}:${env.DOCKER_TAG}"
                 }
@@ -108,12 +90,10 @@ pipeline {
         stage('🚀 Blue-Green Deploy & Switch') {
             steps {
                 script {
-                    // 1. 현재 Nginx가 바라보고 있는 활성 슬롯 확인
+                    // 1. 현재 살아있는 슬롯 확인
                     def currentSlot = sh(
                         script: """
-                            if [ -f "${DEPLOY_DIR}/nginx/service-url.inc" ]; then
-                                awk '{print \$3}' ${DEPLOY_DIR}/nginx/service-url.inc | tr -d ';'
-                            elif docker ps --format '{{.Names}}' | grep -q '^${SERVICE_NAME}-blue\$'; then
+                            if docker ps --format '{{.Names}}' | grep -q '^${SERVICE_NAME}-blue\$'; then
                                 echo "${SERVICE_NAME}-blue"
                             elif docker ps --format '{{.Names}}' | grep -q '^${SERVICE_NAME}-green\$'; then
                                 echo "${SERVICE_NAME}-green"
@@ -125,7 +105,7 @@ pipeline {
                     ).trim()
 
                     def newSlot = (currentSlot == "${SERVICE_NAME}-blue") ? "${SERVICE_NAME}-green" : "${SERVICE_NAME}-blue"
-                    echo "🔄 무중단 슬롯 전환 준비: ${currentSlot ?: '없음'} → ${newSlot}"
+                    echo "🔄 무중단 슬롯 전환 준비: ${currentSlot ?: '없음(초기 배포)'} → ${newSlot}"
 
                     // 2. 배포용 컴포즈 파일 동기화 및 새 슬롯 컨테이너 기동
                     sh """
@@ -138,17 +118,17 @@ pipeline {
                     // 3. 새 슬롯 Health Check (/actuator/health 기반 Docker HEALTHCHECK)
                     echo "⏳ [${newSlot}] Health Check 시작..."
                     def success = false
-                    for (int i = 1; i <= 15; i++) {
+                    for (int i = 1; i <= 18; i++) {
                         def health = sh(
                             script: "docker inspect --format='{{.State.Health.Status}}' ${newSlot} 2>/dev/null || echo 'starting'",
                             returnStdout: true
                         ).trim()
                         if (health == 'healthy') {
-                            echo "✅ [${newSlot}] HEALTHY (${i}/15)"
+                            echo "✅ [${newSlot}] HEALTHY (${i}/18)"
                             success = true
                             break
                         }
-                        echo "⏳ [${newSlot}] ${health} (${i}/15) - 5s 대기..."
+                        echo "⏳ [${newSlot}] ${health} (${i}/18) - 5s 대기..."
                         sleep 5
                     }
                     if (!success) {
