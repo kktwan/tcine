@@ -101,6 +101,17 @@ domain/tv/service     TvRecommendService, TvCorpusManager         (AbstractXxx �
    - 화면에 반환되는 모든 추천 카드는 최대 **18개 (`MAX_CARDS = 18`)** 이며, 항상 **개봉연도/방영연도 내림차순(최신순)**, 동률 시 평점 높은 순으로 정렬됨.
    - 단, 기준 작품 없는 일반 검색에서 **제목·인물이 질의와 정확히 맞은 작품**(키워드 점수 `entityStrong`=65 이상)은 연도와 상관없이 맨 앞에 두고, 그 안에서 최신순(`sortCards`). 분위기·장르 검색처럼 일치 작품이 없으면 전체 최신순. 빠른 검색(`searchFast`)에도 같은 규칙을 쓴다.
 
+### 관련도 하한 (`search.ranking.relevance.min-vector-score`)
+
+- 의미 없는 질의(`asdfasdf`)도 벡터 검색은 항상 가장 가까운 작품을 돌려주고 AI가 그럴듯하게 골라 주는 문제를 막는 장치다.
+- 벡터 유사도 1위가 하한보다 낮고, **제목·인물이 맞은 작품도 없으면** AI를 부르지 않고 "관련 작품을 찾지 못했어요"로 답한다. "비슷한 작품"(기준 작품 있음) 요청에는 적용하지 않는다.
+- 기본값 `0`(꺼짐). 환경변수 `SEARCH_MIN_VECTOR_SCORE`로 코드 수정 없이 조정한다. 값은 평가 세트 리포트의 `점수: 벡터 1위 …` 분포를 보고 정한다.
+  - 로컬 색인 기준 무의미 질의 1위 0.27, 정상 질의 1위 0.33 이상. 색인 규모가 다르면 분포도 다르므로 **운영에서 먼저 측정**할 것.
+- 평가 실행 시 같은 환경변수를 주면 하한이 적용된 상태로 측정된다.
+
+### OTT 점수 처리
+
+- OTT/방송사 일치는 후보 선정 뒤 필터(`enforceNetworkFilter`)로만 반영한다. RRF의 고유명사 보너스·`[검색어 일치]` 표시·일치 작품 앞세우기에는 쓰지 않는다(쓰면 ×25로 증폭돼 장르·의미 점수가 순위에 영향을 못 줌).
 ### 알려진 주의점
 
 - **코퍼스 문서 메타데이터 수정**: "OO와 비슷한" 검색에서 기준 작품의 `genres`/`keywords`를 여러 일치 작품의 합집합으로 바꿀 때(`resolveReference`) 캐시된 코퍼스 문서의 메타데이터를 직접 수정한다. 그 작품의 장르가 코퍼스 캐시(15분)가 갱신될 때까지 합쳐진 값으로 남는다. 리팩터링 전부터 있던 동작이며 순위에 영향을 줄 수 있어 그대로 유지했다. 고친다면 문서 복사본을 쓰고 위 비교 테스트 기대값을 같이 확인할 것.
@@ -126,3 +137,17 @@ domain/tv/service     TvRecommendService, TvCorpusManager         (AbstractXxx �
 - **프롬프트 입출력 토큰 다이어트**:
   - LLM 응답 지연 시간(TTFT 및 토큰 생성 시간)은 **출력 토큰 수(18편 각각의 `reason` 길이)** 에 비례합니다.
   - 따라서 `CANDIDATES = 20`으로 압축된 메타데이터만 전달하고, `summary`는 50자 이내 1문장, 각 `reason`은 20~32자 내외의 짧은 한 줄로 생성하도록 유지해야 빠른 응답 속도(약 1.5~2초)가 보장됩니다.
+
+## 3. 검색 품질 평가 (평가 세트)
+
+검색 규칙·점수·프롬프트·색인을 바꾸기 전후에 **좋아졌는지 숫자로 확인**하는 도구다. 실제로 겪은 이상한 검색 결과를 케이스로 쌓아 둔다.
+
+- 케이스: [`src/test/resources/search-eval/cases.yml`](../../src/test/resources/search-eval/cases.yml) (검색어, 나와야 할 것/나오면 안 되는 것, 왜 만들었는지)
+- 실행기: `SearchEvalTest` — 실제 임베딩·Qdrant·Gemini를 호출하므로 평소 빌드에서는 건너뛴다.
+  ```bash
+  RUN_SEARCH_EVAL=true ./gradlew.bat test --tests "*SearchEvalTest*" --no-daemon -i
+  ```
+  PowerShell: `$env:RUN_SEARCH_EVAL='true'; ./gradlew.bat test --tests "*SearchEvalTest*" --no-daemon -i`
+- 결과: 콘솔과 `build/search-eval-report.txt`에 케이스별 PASS/FAIL, 상위 결과 제목, 실패 이유가 나온다. 실패 시 빌드를 깨려면 `EVAL_STRICT=true`.
+- 로컬 색인(영화 1,300편·시리즈 220편)과 운영 색인(약 7,370편·4,260편)은 규모가 달라 통과율이 다를 수 있다. 이상한 검색 결과를 발견하면 먼저 케이스로 추가하고, 원인(관련도 하한 / 점수 균형 / 색인 데이터)으로 설명되는지 본다.
+

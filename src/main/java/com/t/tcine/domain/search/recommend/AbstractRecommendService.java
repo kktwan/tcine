@@ -189,6 +189,10 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
         }
         long searchedAt = System.currentTimeMillis();
         if (docs.isEmpty()) return emptyResult(messages.indexEmpty());
+        if (isIrrelevant(docs, reference, excludeId, searchText)) {
+            log.info("{} 추천: 관련 작품 없음으로 판단해 AI 를 부르지 않음 (질의={})", label, searchText);
+            return emptyResult(messages.noRelevantResult());
+        }
 
         Map<Integer, Document> candidates = selectCandidates(docs, reference, requestText, excludeId);
 
@@ -220,7 +224,7 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
         String targetTitle = analyzer.similarTargetTitle(requestText);
         if (targetTitle.isEmpty()) return plain;
         List<Document> targetMatches = findKeywordMatches(targetTitle).stream()
-                .filter(d -> ranking.isEntityMatch(ranking.keywordScore(d, targetTitle, kind))).toList();
+                .filter(d -> ranking.isEntityMatch(ranking.keywordScore(d, targetTitle, kind, false))).toList();
         if (targetMatches.isEmpty()) return plain;
 
         Document ref = targetMatches.get(0);
@@ -266,6 +270,64 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
         return ranking.mergeAndRank(keywordDocs, vectorDocs, searchText, runKeywordSearch, FETCH, kind);
     }
 
+    /**
+     * 검색 품질 진단용: Gemini 를 부르지 않고 검색 단계의 점수 분포만 돌려준다
+     * (관련도 하한을 정하거나 평가 세트에서 질의별 점수를 볼 때 쓴다).
+     */
+    public RetrievalProbe probe(String query) throws Exception {
+        String q = QueryAnalyzer.normalize(query, MAX_QUERY_LENGTH);
+        Reference reference = resolveReference(q, q, 0);
+        List<Document> vectorDocs = vectorStore.similaritySearch(
+                SearchRequest.builder().query(reference.searchText()).topK(FETCH).similarityThreshold(0.0).build());
+        List<Double> vectorScores = vectorDocs.stream().map(d -> d.getScore() == null ? 0.0 : d.getScore()).toList();
+        List<Document> keywordDocs = findKeywordMatches(q);
+        int topKeyword = keywordDocs.isEmpty() ? 0 : ranking.keywordScore(keywordDocs.get(0), q, kind);
+        return new RetrievalProbe(vectorScores, keywordDocs.size(), topKeyword, reference.doc() != null);
+    }
+
+    /**
+     * 검색 품질 진단용: 후보가 어떤 점수로 순위가 매겨지는지 항목별로 돌려준다 (Gemini 호출 없음).
+     * similarity = RRF·벡터가 매긴 의미 점수, bonus = 장르·최신작·평점·기준작품·OTT 가감점 합계.
+     */
+    public List<CandidateExplain> explain(String query, int limit) throws Exception {
+        String q = QueryAnalyzer.normalize(query, MAX_QUERY_LENGTH);
+        Reference reference = resolveReference(q, q, 0);
+        List<Document> docs = retrieve(q, reference, 0);
+        Document refDoc = reference.doc();
+        Set<String> requestedNetworks = refDoc == null && kind.isTv() ? analyzer.extractRequestedNetworks(q) : Set.of();
+        Set<String> requestedGenres = refDoc == null ? analyzer.extractRequestedGenres(q, kind) : Set.of();
+
+        List<CandidateExplain> rows = new ArrayList<>();
+        for (Document d : docs) {
+            if (refDoc != null && d.getId().equals(refDoc.getId())) continue;
+            double total = ranking.boostedScore(d, q, refDoc, requestedGenres, requestedNetworks, kind);
+            double similarity = ranking.similarityScore(d);
+            Map<String, Object> m = d.getMetadata();
+            rows.add(new CandidateExplain(str(m.get("title")), intOf(m.get("year")), str(m.get("genres")),
+                    doubleOf(m.get("vector_score")), similarity, total - similarity, total));
+        }
+        rows.sort(Comparator.comparingDouble(CandidateExplain::total).reversed());
+        return rows.stream().limit(limit).toList();
+    }
+
+    public record CandidateExplain(String title, int year, String genres, double vector, double similarity,
+                                   double bonus, double total) {}
+
+    /** 검색 단계 점수 분포: 벡터 유사도(내림차순), 키워드 일치 작품 수, 키워드 최고점, 기준 작품을 찾았는지 */
+    public record RetrievalProbe(List<Double> vectorScores, int keywordMatches, int topKeywordScore, boolean referenceFound) {}
+
+    /**
+     * 검색어와 관련 있는 작품이 없다고 볼 수 있는지: 벡터 유사도 1위가 하한보다 낮고, 제목·인물이 맞은 작품도 없을 때.
+     * 기준 작품이 있는 "비슷한 작품" 요청에는 적용하지 않는다. 하한이 0 이하면 항상 false.
+     */
+    private boolean isIrrelevant(List<Document> docs, Reference reference, int excludeId, String searchText) {
+        double min = ranking.minVectorScore();
+        if (min <= 0 || excludeId != 0 || reference.doc() != null) return false;
+        double topVector = docs.stream().mapToDouble(d -> doubleOf(d.getMetadata().get("vector_score"))).max().orElse(0);
+        if (topVector >= min) return false;
+        return docs.stream().noneMatch(d -> ranking.isEntityMatch(ranking.keywordScore(d, searchText, kind, false)));
+    }
+
     /** 3단계: 재순위 후 장르·OTT·기준 작품 시리즈 필터를 적용해 Gemini 에게 줄 후보 CANDIDATES 편을 추린다 */
     private Map<Integer, Document> selectCandidates(List<Document> docs, Reference reference, String queryForRank, int excludeId) {
         final Document refForRank = reference.doc();
@@ -308,7 +370,8 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
     private R curate(Reference reference, Map<Integer, Document> byId, String requestText, int excludeId) throws InterruptedException {
         final String modelRequest = reference.requestText();
         try {
-            Future<ModelAnswer> future = pool.submit(() -> askModel(modelRequest, byId));
+            final String entityQuery = entityFirstAllowed(reference, excludeId) ? requestText : null;
+            Future<ModelAnswer> future = pool.submit(() -> askModel(modelRequest, byId, entityQuery));
             ModelAnswer answer = future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
             return toResult(requestText, answer, byId, entityFirstAllowed(reference, excludeId));
         } catch (TimeoutException e) {
@@ -335,11 +398,19 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
                 .toList();
     }
 
-    private ModelAnswer askModel(String q, Map<Integer, Document> byId) {
+    /**
+     * @param entityQuery 제목·인물·OTT 일치를 후보에 표시할 때 쓸 사용자 검색어 (기준 작품 요청처럼 표시하지 않을 때는 null).
+     *                    후보 줄은 출연진 등을 줄여서 보내므로, 줄에서 안 보이는 일치를 AI 가 놓치지 않게 알려 준다.
+     */
+    private ModelAnswer askModel(String q, Map<Integer, Document> byId, String entityQuery) {
         StringBuilder sb = new StringBuilder();
         sb.append("요청: \"").append(q).append("\"\n\n").append(messages.candidateHeader()).append('\n');
         for (Map.Entry<Integer, Document> e : byId.entrySet()) {
-            sb.append(candidateLine(e.getKey(), e.getValue())).append('\n');
+            sb.append(candidateLine(e.getKey(), e.getValue()));
+            if (entityQuery != null && ranking.isEntityMatch(ranking.keywordScore(e.getValue(), entityQuery, kind, false))) {
+                sb.append(" [검색어 일치]");
+            }
+            sb.append('\n');
         }
 
         String systemPrompt = "";
@@ -349,7 +420,10 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
             log.error("Failed to read system prompt resource", e);
         }
 
-        return chatClient.prompt().system(systemPrompt).user(sb.toString()).call().entity(ModelAnswer.class);
+        log.debug("{} 추천 AI 요청: {}", label, sb);
+        ModelAnswer answer = chatClient.prompt().system(systemPrompt).user(sb.toString()).call().entity(ModelAnswer.class);
+        log.debug("{} 추천 AI 응답: {}", label, answer);
+        return answer;
     }
 
     private R toResult(String query, ModelAnswer answer, Map<Integer, Document> byId, boolean allowEntityCompletion) {
@@ -370,7 +444,11 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
             completeEntityMatches(query, byId, cards, used);
         }
 
-        if (cards.isEmpty()) return fallback(query, byId, allowEntityCompletion, summary.isEmpty() ? messages.aiPickedNothing() : summary);
+        // AI 가 하나도 고르지 못했어도 제목·인물이 정확히 맞은 후보는 보여 준다
+        if (cards.isEmpty() && allowEntityCompletion) addEntityMatches(query, byId, cards, used);
+
+        // AI 의 summary 는 안내 문구가 아니라 코멘트이므로, 고른 작품이 없을 땐 쓰지 않고 정해 둔 안내를 보여 준다
+        if (cards.isEmpty()) return fallback(query, byId, allowEntityCompletion, messages.aiPickedNothing());
         sortCards(cards, query, byId, allowEntityCompletion);
         return newResult(summary.isEmpty() ? null : summary, cards, true, null);
     }
@@ -379,11 +457,20 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
      * 제목·인물이 질의와 정확히 맞는 후보가 여럿인데 AI 가 일부만 골랐다면 나머지도 카드에 보탠다
      * (예: "해리포터" 검색에서 시리즈 일부만 고르는 경우).
      */
+    private void addEntityMatches(String query, Map<Integer, Document> byId, List<C> cards, Set<Integer> used) {
+        for (Map.Entry<Integer, Document> entry : byId.entrySet()) {
+            if (cards.size() >= MAX_CARDS) break;
+            if (ranking.isEntityMatch(ranking.keywordScore(entry.getValue(), query, kind, false)) && used.add(entry.getKey())) {
+                cards.add(card(entry.getKey(), entry.getValue(), null));
+            }
+        }
+    }
+
     private void completeEntityMatches(String query, Map<Integer, Document> byId, List<C> cards, Set<Integer> used) {
         List<Map.Entry<Integer, Document>> entityMatches = byId.entrySet().stream()
-                .filter(e -> ranking.isEntityMatch(ranking.keywordScore(e.getValue(), query, kind))).toList();
+                .filter(e -> ranking.isEntityMatch(ranking.keywordScore(e.getValue(), query, kind, false))).toList();
         long pickedEntityMatches = cards.stream()
-                .filter(c -> byId.containsKey(c.id()) && ranking.isEntityMatch(ranking.keywordScore(byId.get(c.id()), query, kind))).count();
+                .filter(c -> byId.containsKey(c.id()) && ranking.isEntityMatch(ranking.keywordScore(byId.get(c.id()), query, kind, false))).count();
         if (entityMatches.size() >= 2 && pickedEntityMatches >= 1 && pickedEntityMatches < entityMatches.size()) {
             for (Map.Entry<Integer, Document> entry : entityMatches) {
                 if (cards.size() >= MAX_CARDS) break;
@@ -410,7 +497,7 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
         Set<Integer> entityIds = new HashSet<>();
         for (C c : cards) {
             Document doc = byId.get(c.id());
-            if (doc != null && ranking.isEntityMatch(ranking.keywordScore(doc, query, kind))) entityIds.add(c.id());
+            if (doc != null && ranking.isEntityMatch(ranking.keywordScore(doc, query, kind, false))) entityIds.add(c.id());
         }
         cards.sort(Comparator.<C>comparingInt(c -> entityIds.contains(c.id()) ? 0 : 1).thenComparing(byYearDesc));
     }

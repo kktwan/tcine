@@ -137,3 +137,11 @@ movie:
 
 tv:
   collection-name: ${TV_COLLECTION_NAME:tcine-tv-openai}
+
+# 검색 순위/관련도 설정 (가중치 기본값은 RankingProperties, 어휘는 search-dictionary.yml)
+search:
+  ranking:
+    relevance:
+      # 벡터 유사도 1위가 이 값보다 낮고 제목·인물이 맞은 작품도 없으면 AI 를 부르지 않고 "관련 작품 없음"으로 답한다. 0 이면 끔.
+      # 평가 세트 리포트의 "벡터 1위" 점수를 보고 정한다. (로컬 기준 무의미 질의 0.27, 정상 질의 0.33 이상)
+      min-vector-score: ${SEARCH_MIN_VECTOR_SCORE:0}

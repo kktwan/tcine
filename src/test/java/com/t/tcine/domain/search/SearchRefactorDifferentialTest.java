@@ -136,6 +136,8 @@ class SearchRefactorDifferentialTest {
     void mergeAndRankMatchesLegacy() {
         for (MediaKind kind : MediaKind.values()) {
             for (String q : QUERIES) {
+                // 시리즈에서 OTT 를 요청한 질의는 고유명사 보너스에서 OTT 를 뺐으므로(의도된 변경) 레거시와 순서가 다를 수 있다
+                if (kind.isTv() && !LegacyQueryAnalyzer.extractRequestedNetworks(q).isEmpty()) continue;
                 List<Document> kwOld = keywordHits();
                 List<Document> vecOld = vectorHits();
                 List<Document> kwNew = keywordHits();

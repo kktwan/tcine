@@ -40,7 +40,8 @@ public class MovieRecommendService extends AbstractRecommendService<MovieResult,
             "이 영화는 비교할 정보가 부족해요.",
             "\"%s\"와 세계관·분위기·장르·서사 결이 비슷한 다른 영화 (기준 영화 및 동일 시리즈 제외).\n[기준 영화 정보]\n%s",
             "\"%s\"와 세계관·분위기·하위 장르·서사 구조가 비슷한 다른 영화 (기준 영화 및 같은 시리즈는 반드시 제외).\n[기준 영화 정보]\n%s",
-            "[후보 영화]");
+            "[후보 영화]",
+            "검색어와 관련 있는 영화를 찾지 못했어요. 작품명·배우·분위기를 바꿔서 다시 검색해 보세요.");
 
     private final MovieDetailService detailService;
     private final QueryAnalyzer analyzer;

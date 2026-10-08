@@ -27,6 +27,7 @@ public class RankingProperties {
     private Recency tv = Recency.of(2005, new Penalty(2000, -0.25), new Penalty(2008, -0.10));
     private Rating rating = new Rating();
     private Alignment alignment = new Alignment();
+    private Relevance relevance = new Relevance();
 
     public Recency recency(boolean isTv) {
         return isTv ? tv : movie;
@@ -104,6 +105,17 @@ public class RankingProperties {
         private double base = 6.0;
         private double span = 2.8;
         private double weight = 0.09;
+    }
+
+    /** 관련도 하한: 검색어와 관련 있는 작품이 없는 질의(의미 없는 문자열 등)에서 AI 를 부르지 않기 위한 기준 */
+    @Getter
+    @Setter
+    public static class Relevance {
+        /**
+         * 벡터 유사도 1위가 이 값보다 낮고 제목·인물이 맞은 작품도 없으면 "관련 작품 없음"으로 답한다.
+         * 0 이하면 끈다. 값은 평가 세트 리포트의 "벡터 1위" 점수 분포를 보고 정한다.
+         */
+        private double minVectorScore = 0.0;
     }
 
     /** 기준 작품·요청 장르·OTT 와 얼마나 맞는지에 따른 가감점 */

@@ -1,0 +1,163 @@
+# 검색 품질 평가 세트. 검색 규칙·점수·프롬프트·색인을 바꾸기 전후에 돌려서 좋아졌는지 숫자로 확인한다.
+# 실행: docs/agents/rag-and-search.md 의 "검색 품질 평가" 참고.
+#
+# 케이스 형식
+#   id      케이스 이름
+#   kind    movie | tv
+#   query   검색어 (화면에 입력하는 그대로)
+#   note    왜 이 케이스가 있는지 (실제로 겪은 문제)
+#   checks  아래 중 필요한 것만
+#     minCards: N            결과가 N편 이상
+#     expectNoCards: true    결과가 없어야 함 (의미 없는 질의)
+#     first:  {field, contains}            첫 번째 결과의 field 에 contains 가 있어야 함
+#     require:[{field, contains}]          결과 중 하나 이상이 만족
+#     forbid: [{field, contains}]          결과 중 하나라도 만족하면 실패
+#     ratios: [{field, containsAny:[...], min: 0.6}]   결과 중 min 비율 이상이 만족
+#   field: title | genres | cast | director | creator | networks | overview | year | text(모든 값 이어붙인 것)
+#
+# scope: prod  운영 색인에서만 의미 있는 케이스. 로컬에서는 건너뛰고(SKIP) 통과율에 넣지 않는다.
+#              운영 색인으로 돌릴 때는 환경변수 EVAL_ENV=prod 를 준다.
+#
+# 주의: 정답은 "색인에 실제로 있는 작품"에 맞춰야 한다. 로컬(영화 1,300편·시리즈 220편)과
+# 운영(영화 약 7,370편·시리즈 약 4,260편)은 색인 규모가 달라서 통과율이 다를 수 있다.
+cases:
+
+  # ───── 제목·인물 검색: 정확히 일치한 작품이 나와야 한다 ─────
+  - id: movie-title-lotr
+    kind: movie
+    query: 반지의제왕
+    note: 제목 일치 작품이 연도순에 밀려 아래에 나왔음
+    checks:
+      first: { field: title, contains: 반지의 제왕 }
+      require: [{ field: title, contains: 반지의 제왕 }]
+
+  - id: movie-title-toystory
+    kind: movie
+    query: 토이스토리
+    note: 외래어 끝 글자가 조사로 잘리면 안 됨
+    checks:
+      first: { field: title, contains: 토이 스토리 }
+
+  - id: movie-person-bong
+    kind: movie
+    query: 봉준호 감독
+    checks:
+      ratios: [{ field: director, containsAny: [봉준호], min: 0.5 }]
+
+  - id: movie-person-songkangho
+    kind: movie
+    query: 송강호 나오는 영화
+    checks:
+      ratios: [{ field: cast, containsAny: [송강호], min: 0.5 }]
+
+  - id: tv-person-songkangho
+    kind: tv
+    scope: prod
+    query: 송강호 배우
+    note: 운영에서 출연진이 후보 줄에서 잘려 AI가 못 찾고 관련 없는 중국 드라마가 나왔음 (주의 - 로컬 시리즈 색인에는 송강호 출연작이 없어 로컬에서는 항상 실패)
+    checks:
+      require: [{ field: cast, containsAny: [송강호] }]
+      ratios: [{ field: cast, containsAny: [송강호], min: 0.5 }]
+
+  - id: tv-title-drkimsabu
+    kind: tv
+    query: 낭만닥터 김사부
+    checks:
+      first: { field: title, contains: 낭만닥터 }
+
+  - id: movie-series-harrypotter
+    kind: movie
+    query: 해리포터 시리즈 전체
+    checks:
+      minCards: 2
+      ratios: [{ field: title, containsAny: [해리 포터, 해리포터], min: 0.8 }]
+
+  # ───── 장르·분위기 ─────
+  - id: movie-genre-romance
+    kind: movie
+    query: 달달한 로맨스 영화 추천
+    note: 전쟁·공포·범죄물이 섞이면 안 됨
+    checks:
+      ratios: [{ field: genres, containsAny: [로맨스], min: 0.7 }]
+      forbid:
+        - { field: genres, contains: 전쟁 }
+        - { field: genres, contains: 공포 }
+        - { field: genres, contains: 범죄 }
+
+  - id: movie-genre-horror
+    kind: movie
+    query: 무서운 공포 영화
+    checks:
+      ratios: [{ field: genres, containsAny: [공포], min: 0.7 }]
+
+  - id: movie-mood-moving
+    kind: movie
+    explain: true
+    query: 감동적인 영화
+    note: 감동과 무관한 액션 영화(역습)가 나왔음 - 관련도가 낮은 후보가 걸러지지 않음
+    checks:
+      forbid: [{ field: title, contains: 역습 }]
+
+  - id: movie-classic
+    kind: movie
+    query: 옛날 명작 영화
+    note: '"옛날"이 제목 검색어로 쓰여 "옛날 옛적, 미래에"(2026) 같은 신작이 나왔음 - 결과가 대부분 2000년 이전 작품이어야 함'
+    checks:
+      ratios: [{ field: year, containsAny: [195, 196, 197, 198, 199], min: 0.8 }]
+
+  # ───── 의미 없는 질의 ─────
+  - id: movie-garbage
+    kind: movie
+    query: asdfasdf
+    note: 의미 없는 질의에도 로맨스 영화 3편이 나왔음 - 관련도 하한이 없음
+    checks:
+      expectNoCards: true
+
+  # ───── 비슷한 작품 찾기 ─────
+  - id: tv-similar-doctors-life
+    kind: tv
+    explain: true
+    query: 슬기로운 의사생활과 비슷한 시리즈
+    note: >-
+      기준 작품이 '병원 배경 + 20년지기 친구들의 케미 코미디'라서 "비슷한"이 의료 소재인지 우정·일상 분위기인지 해석이 갈린다.
+      의료 소재가 일부 섞이는 것을 기준으로 삼는다(40% 이상). LOW 사고 수준으로 바꿔도 결과가 거의 같았음.
+    checks:
+      forbid: [{ field: title, contains: 슬기로운 의사생활 }]
+      ratios: [{ field: text, containsAny: [의사, 병원, 의료, 닥터, 응급], min: 0.4 }]
+
+  - id: movie-similar-toystory
+    kind: movie
+    query: 토이스토리와 비슷한 영화
+    checks:
+      forbid: [{ field: title, contains: 토이 스토리 }]
+      ratios: [{ field: genres, containsAny: [애니메이션], min: 0.6 }]
+
+  # ───── 시리즈: OTT·장르 ─────
+  - id: tv-network-netflix-romance
+    kind: tv
+    explain: true
+    query: 넷플릭스 로맨스 드라마 추천
+    note: TMDB TV에는 로맨스 장르가 없고 키워드가 영어라 로맨스 필터가 동작하지 않아 참교육 등이 나왔음
+    checks:
+      ratios: [{ field: networks, containsAny: [Netflix], min: 1.0 }]
+      forbid: [{ field: title, contains: 참교육 }]
+
+  - id: tv-network-tving-variety
+    kind: tv
+    query: 티빙 예능
+    checks:
+      ratios: [{ field: networks, containsAny: [TVING, 티빙], min: 0.8 }]
+
+  - id: tv-network-coupang-spacing
+    kind: tv
+    query: 쿠팡 플레이 시리즈
+    note: 띄어쓰기가 있어도 같은 OTT로 인식해야 함
+    checks:
+      ratios: [{ field: networks, containsAny: [Coupang, 쿠팡], min: 0.8 }]
+
+  - id: tv-title-reply
+    kind: tv
+    query: 응답하라 시리즈
+    note: 응답하라는 고전 요청 단어이면서 실제 드라마 제목
+    checks:
+      require: [{ field: title, contains: 응답하라 }]

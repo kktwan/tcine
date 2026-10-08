@@ -39,7 +39,8 @@ public class TvRecommendService extends AbstractRecommendService<TvResult, TvCar
             "이 작품은 비교할 정보가 부족해요.",
             "\"%s\"와 세계관·분위기·장르·서사 결이 비슷한 다른 시리즈 (기준 작품 제외).\n[기준 작품 정보]\n%s",
             "\"%s\"와 세계관·분위기·하위 장르·서사 구조가 비슷한 다른 시리즈 (기준 작품은 반드시 제외).\n[기준 작품 정보]\n%s",
-            "[후보 시리즈]");
+            "[후보 시리즈]",
+            "검색어와 관련 있는 시리즈를 찾지 못했어요. 작품명·배우·분위기·OTT를 바꿔서 다시 검색해 보세요.");
 
     private final TvDetailService detailService;
 

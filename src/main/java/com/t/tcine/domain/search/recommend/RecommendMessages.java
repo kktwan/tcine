@@ -19,7 +19,8 @@ public record RecommendMessages(
         String insufficientInfo,
         String similarByIdRequest,
         String similarByTitleRequest,
-        String candidateHeader) {
+        String candidateHeader,
+        String noRelevantResult) {
 
     public static final String AI_NOT_CONFIGURED = "AI가 아직 설정되지 않았어요. (서버에 GEMINI_API_KEY가 필요해요)";
     public static final String LIMIT_REACHED = "오늘 사용 횟수를 모두 썼어요. 내일 다시 이용해 주세요.";

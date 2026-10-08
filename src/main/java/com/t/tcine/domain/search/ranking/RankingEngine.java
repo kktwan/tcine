@@ -34,11 +34,21 @@ public class RankingEngine {
     // ───────────────────────── 키워드 점수 ─────────────────────────
 
     public int keywordScore(Document document, String query, MediaKind kind) {
+        return keywordScore(document, query, kind, true);
+    }
+
+    /**
+     * @param withNetworks false 면 OTT/방송사 일치를 점수에 반영하지 않는다.
+     *                     OTT 는 후보 선정 뒤 필터로 따로 적용되므로, RRF 의 고유명사 보너스에는 쓰지 않는다
+     *                     (쓰면 ×25 로 증폭돼 장르·의미 점수가 순위에 영향을 못 준다).
+     */
+    public int keywordScore(Document document, String query, MediaKind kind, boolean withNetworks) {
         boolean isTv = kind.isTv();
+        boolean useNetworks = isTv && withNetworks;
         RankingProperties.Keyword w = props.getKeyword();
         Map<String, Object> metadata = document.getMetadata();
         List<String> terms = analyzer.extractCoreTerms(query);
-        Set<String> requestedNetworks = isTv ? analyzer.extractRequestedNetworks(query) : Set.of();
+        Set<String> requestedNetworks = useNetworks ? analyzer.extractRequestedNetworks(query) : Set.of();
 
         if (terms.isEmpty() && requestedNetworks.isEmpty()) return 0;
 
@@ -51,12 +61,12 @@ public class RankingEngine {
         String overview = QueryAnalyzer.compact(str(metadata.get("overview")));
 
         String creatorOrDirector = QueryAnalyzer.compact(str(metadata.get(isTv ? "creator" : "director")));
-        String networks = isTv ? QueryAnalyzer.compact(str(metadata.get("networks"))) : "";
+        String networks = useNetworks ? QueryAnalyzer.compact(str(metadata.get("networks"))) : "";
         int castScore = w.cast(isTv);
 
         int totalScore = 0;
 
-        if (isTv && !requestedNetworks.isEmpty() && matchesRequestedNetworks(networks, requestedNetworks)) {
+        if (useNetworks && !requestedNetworks.isEmpty() && matchesRequestedNetworks(networks, requestedNetworks)) {
             totalScore = Math.max(totalScore, w.getNetworkMatch());
         }
 
@@ -65,7 +75,7 @@ public class RankingEngine {
             else if (title.startsWith(fullCore) || originalTitle.startsWith(fullCore)) totalScore = Math.max(totalScore, w.getTitleStartsWith());
             else if (title.contains(fullCore) || originalTitle.contains(fullCore)) totalScore = Math.max(totalScore, w.getTitleContains());
             else if (creatorOrDirector.contains(fullCore)) totalScore = Math.max(totalScore, w.getCreator());
-            else if (cast.contains(fullCore) || (isTv && networkMatches(networks, fullCore))) totalScore = Math.max(totalScore, castScore);
+            else if (cast.contains(fullCore) || (useNetworks && networkMatches(networks, fullCore))) totalScore = Math.max(totalScore, castScore);
             else if (keywords.contains(fullCore)) totalScore = Math.max(totalScore, w.getKeywords());
         }
 
@@ -77,7 +87,7 @@ public class RankingEngine {
             if (title.equals(term) || originalTitle.equals(term)) termScore = w.getTermTitleEquals();
             else if (title.startsWith(term) || originalTitle.startsWith(term)) termScore = w.getTermTitleStartsWith();
             else if (creatorOrDirector.contains(term)) termScore = w.getTermCreator();
-            else if (cast.contains(term) || (isTv && networkMatches(networks, term))) termScore = castScore;
+            else if (cast.contains(term) || (useNetworks && networkMatches(networks, term))) termScore = castScore;
             else if (title.contains(term) || originalTitle.contains(term)) termScore = w.getTermTitleContains();
             else if (keywords.contains(term)) termScore = w.getTermKeywords();
             else if (genres.contains(term)) termScore = w.getTermGenres();
@@ -91,6 +101,11 @@ public class RankingEngine {
 
         if (terms.size() >= 2 && matchedTerms == terms.size()) termSum += w.getAllTermsBonus();
         return Math.max(totalScore, termSum);
+    }
+
+    /** 관련도 하한 (0 이하면 꺼짐) */
+    public double minVectorScore() {
+        return props.getRelevance().getMinVectorScore();
     }
 
     /** 키워드 점수가 "작품·인물 이름이 정확히 맞았다"고 볼 만큼 높은지 */
@@ -112,13 +127,19 @@ public class RankingEngine {
                                Set<String> requestedNetworks, MediaKind kind) {
         boolean isTv = kind.isTv();
         Map<String, Object> m = d.getMetadata();
-        double rrfPart = m.containsKey("hybrid_score") ? doubleOf(m.get("hybrid_score")) * props.getRrfWeight() : 0.0;
-        double vecPart = m.containsKey("vector_score") ? doubleOf(m.get("vector_score")) * props.getVectorWeight()
-                : (d.getScore() != null ? d.getScore() * props.getVectorWeight() : 0.0);
-        double similarity = rrfPart + vecPart;
+        double similarity = similarityScore(d);
 
         return similarity + recencyBonus(m, query, isTv) + ratingBonus(m)
                 + alignmentBonus(d, query, refDoc, requestedGenres, requestedNetworks, kind);
+    }
+
+    /** 순위 점수 중 "의미·키워드 검색이 매긴 부분" (RRF 점수 + 벡터 유사도). 나머지는 장르·최신작·평점 등 가감점 */
+    public double similarityScore(Document d) {
+        Map<String, Object> m = d.getMetadata();
+        double rrfPart = m.containsKey("hybrid_score") ? doubleOf(m.get("hybrid_score")) * props.getRrfWeight() : 0.0;
+        double vecPart = m.containsKey("vector_score") ? doubleOf(m.get("vector_score")) * props.getVectorWeight()
+                : (d.getScore() != null ? d.getScore() * props.getVectorWeight() : 0.0);
+        return rrfPart + vecPart;
     }
 
     private double recencyBonus(Map<String, Object> m, String query, boolean isTv) {
@@ -275,7 +296,7 @@ public class RankingEngine {
 
         for (int i = 0; i < keywordDocs.size(); i++) {
             Document doc = keywordDocs.get(i);
-            double bonus = entityBonus(keywordScore(doc, searchText, kind));
+            double bonus = entityBonus(keywordScore(doc, searchText, kind, false));
             rrfScores.put(doc.getId(), rrfScores.getOrDefault(doc.getId(), 0.0) + (1.0 / (rrfK + i + 1)) + bonus);
             docMap.put(doc.getId(), doc);
         }
@@ -287,7 +308,7 @@ public class RankingEngine {
             }
             double bonus = 0.0;
             if (runKeywordSearch && !docMap.containsKey(doc.getId())) {
-                bonus = entityBonus(keywordScore(doc, searchText, kind));
+                bonus = entityBonus(keywordScore(doc, searchText, kind, false));
             }
             rrfScores.put(doc.getId(), rrfScores.getOrDefault(doc.getId(), 0.0) + (1.0 / (rrfK + i + 1)) + bonus);
             Document existing = docMap.putIfAbsent(doc.getId(), doc);
