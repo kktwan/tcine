@@ -137,6 +137,9 @@ movie:
 
 tv:
   collection-name: ${TV_COLLECTION_NAME:tcine-tv-openai}
+  # 매일 새벽 4시 30분(한국 시간)에 방영 중·한국 신작·인기작을 자동으로 색인한다. 기본은 꺼짐 (운영에서만 TV_AUTO_INDEX=true)
+  auto-index: ${TV_AUTO_INDEX:false}
+  auto-index-cron: ${TV_AUTO_INDEX_CRON:0 30 4 * * *}
 
 # 검색 순위/관련도 설정 (가중치 기본값은 RankingProperties, 어휘는 search-dictionary.yml)
 search:

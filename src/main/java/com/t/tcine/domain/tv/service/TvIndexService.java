@@ -47,6 +47,9 @@ public class TvIndexService {
     private static final List<String> CATEGORIES = List.of(
             "korean", "korean_now", "top_rated", "popular", "animation", "on_the_air", "trending_week");
     private static final int MAX_PAGES = 100;
+    /** 자동(증분) 색인: 신작이 들어오는 목록의 앞쪽만 본다. 이미 있는 시리즈는 건너뛴다 */
+    private static final List<String> AUTO_CATEGORIES = List.of("korean_now", "on_the_air", "popular", "trending_week");
+    private static final int AUTO_PAGES = 3;
     private static final int BATCH_SIZE = 20;
     private static final int DETAIL_THREADS = 4;
     private static final long BATCH_PAUSE_MILLIS = 1500;
@@ -104,7 +107,16 @@ public class TvIndexService {
         }
     }
 
-    public synchronized boolean start(int pages) {
+    public boolean start(int pages) {
+        return startWith(CATEGORIES, pages);
+    }
+
+    /** 새로 들어온 시리즈만 채우는 자동 색인 (스케줄러가 매일 호출). 이미 실행 중이면 false */
+    public boolean startAuto() {
+        return startWith(AUTO_CATEGORIES, AUTO_PAGES);
+    }
+
+    private synchronized boolean startWith(List<String> categories, int pages) {
         if (status.running()) {
             return false;
         }
@@ -118,7 +130,7 @@ public class TvIndexService {
         }
         int safePages = Math.max(1, Math.min(pages, MAX_PAGES));
         status = new IndexStatus(true, 0, "시리즈 색인을 시작합니다…");
-        Thread thread = new Thread(() -> run(CATEGORIES, safePages), "tv-index");
+        Thread thread = new Thread(() -> run(categories, safePages), "tv-index");
         thread.setDaemon(true);
         thread.start();
         return true;
