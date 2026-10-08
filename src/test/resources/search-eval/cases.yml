@@ -13,6 +13,7 @@
 #     require:[{field, contains}]          결과 중 하나 이상이 만족
 #     forbid: [{field, contains}]          결과 중 하나라도 만족하면 실패
 #     ratios: [{field, containsAny:[...], min: 0.6}]   결과 중 min 비율 이상이 만족
+#     maxRatios: [{field, containsAny:[...], max: 0.2}] 결과 중 max 비율 이하만 만족 (예: 장르 단어가 제목에 든 작품이 많으면 안 됨)
 #   field: title | genres | cast | director | creator | networks | overview | year | text(모든 값 이어붙인 것)
 #
 # scope: prod  운영 색인에서만 의미 있는 케이스. 로컬에서는 건너뛰고(SKIP) 통과율에 넣지 않는다.
@@ -54,10 +55,9 @@ cases:
     kind: tv
     scope: prod
     query: 송강호 배우
-    note: 운영에서 출연진이 후보 줄에서 잘려 AI가 못 찾고 관련 없는 중국 드라마가 나왔음 (주의 - 로컬 시리즈 색인에는 송강호 출연작이 없어 로컬에서는 항상 실패)
+    note: 출연진이 후보 줄에서 잘려 AI가 못 찾고 관련 없는 중국 드라마가 나왔음. 시리즈 색인에 송강호 출연작은 1편(성난 사람들)뿐이라 첫 결과만 확인한다 (로컬 색인에는 없어 로컬에서는 건너뜀)
     checks:
-      require: [{ field: cast, containsAny: [송강호] }]
-      ratios: [{ field: cast, containsAny: [송강호], min: 0.5 }]
+      first: { field: cast, contains: 송강호 }
 
   - id: tv-title-drkimsabu
     kind: tv
@@ -76,9 +76,10 @@ cases:
   - id: movie-genre-romance
     kind: movie
     query: 달달한 로맨스 영화 추천
-    note: 전쟁·공포·범죄물이 섞이면 안 됨
+    note: '전쟁·공포·범죄물이 섞이면 안 됨. 또한 "로맨스"가 장르 요청인데 제목 검색어로 쓰여 "오피스 로맨스" 같은 제목에 로맨스가 든 작품이 앞에 나왔음'
     checks:
       ratios: [{ field: genres, containsAny: [로맨스], min: 0.7 }]
+      maxRatios: [{ field: title, containsAny: [로맨스], max: 0.2 }]
       forbid:
         - { field: genres, contains: 전쟁 }
         - { field: genres, contains: 공포 }
@@ -87,8 +88,10 @@ cases:
   - id: movie-genre-horror
     kind: movie
     query: 무서운 공포 영화
+    note: '"공포"가 장르 요청인데 제목 검색어로 쓰여 "공포의 파티" 같은 제목에 공포가 든 작품이 섞였음'
     checks:
       ratios: [{ field: genres, containsAny: [공포], min: 0.7 }]
+      maxRatios: [{ field: title, containsAny: [공포], max: 0.2 }]
 
   - id: movie-mood-moving
     kind: movie

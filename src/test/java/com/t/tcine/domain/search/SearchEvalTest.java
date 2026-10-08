@@ -176,6 +176,16 @@ class SearchEvalTest {
                 failures.add(String.format("%s 에 %s 가 있는 비율 %.0f%% (기준 %.0f%% 이상)", field, any, ratio * 100, min * 100));
             }
         }
+        for (Map<String, Object> r : (List<Map<String, Object>>) checks.getOrDefault("maxRatios", List.of())) {
+            List<String> any = ((List<Object>) r.get("containsAny")).stream().map(String::valueOf).toList();
+            double max = ((Number) r.get("max")).doubleValue();
+            String field = (String) r.get("field");
+            long hit = cards.stream().filter(card -> hasAny(card, field, any)).count();
+            double ratio = cards.isEmpty() ? 0 : (double) hit / cards.size();
+            if (ratio - 1e-9 > max) {
+                failures.add(String.format("%s 에 %s 가 있는 비율 %.0f%% (기준 %.0f%% 이하)", field, any, ratio * 100, max * 100));
+            }
+        }
         return failures;
     }
 

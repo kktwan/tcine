@@ -24,6 +24,7 @@ public class QueryAnalyzer {
     private final Pattern particlePattern;
     private final List<Pattern> ottSpacingPatterns;
     private final Set<String> stopwords;
+    private final Set<String> intentTokens;
 
     public QueryAnalyzer(SearchDictionary dict) {
         this.dict = dict;
@@ -33,6 +34,10 @@ public class QueryAnalyzer {
         this.particlePattern = Pattern.compile("(" + String.join("|", dict.particleSuffixes()) + ")$");
         this.ottSpacingPatterns = dict.ottSpacing().stream().map(r -> Pattern.compile(r.pattern())).toList();
         this.stopwords = Set.copyOf(dict.stopwords());
+        // 장르·분위기 요청 표현과 시대·품질 조건어는 작품·인물 이름이 아니라 조건이다
+        Set<String> intent = new HashSet<>(dict.intentWords());
+        dict.genres().forEach(rule -> intent.addAll(rule.triggers()));
+        this.intentTokens = Set.copyOf(intent);
     }
 
     public static String normalize(String query, int maxLength) {
@@ -81,14 +86,20 @@ public class QueryAnalyzer {
         String normalizedQuery = normalizeOttSpacing(query);
         String[] rawTokens = normalizedQuery.toLowerCase(Locale.ROOT).split("\\s+");
         List<String> core = new ArrayList<>();
+        boolean droppedIntent = false;
         for (String raw : rawTokens) {
             String c = compact(raw);
             if (c.isEmpty() || stopwords.contains(c)) continue;
             String stripped = stripKoreanParticle(c);
-            if (!stripped.isEmpty() && !stopwords.contains(stripped)) {
-                core.add(stripped);
+            if (stripped.isEmpty() || stopwords.contains(stripped)) continue;
+            if (intentTokens.contains(c) || intentTokens.contains(stripped)) {
+                droppedIntent = true;
+                continue;
             }
+            core.add(stripped);
         }
+        // 조건 표현뿐인 검색어(예: "로맨스 영화", "옛날 명작")는 찾을 이름이 없다. 통째로 제목 검색어로 쓰지 않는다
+        if (core.isEmpty() && droppedIntent) return List.of();
         if (core.isEmpty()) {
             String fallback = compact(normalizedQuery);
             return fallback.isEmpty() ? List.of() : List.of(fallback);

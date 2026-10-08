@@ -14,6 +14,7 @@ public record SearchDictionary(
         String similarQueryPattern,
         String classicEraPattern,
         List<String> stopwords,
+        List<String> intentWords,
         List<String> protectedWordSuffixes,
         List<String> particleSuffixes,
         List<String> seriesRequestTriggers,
@@ -30,6 +31,7 @@ public record SearchDictionary(
 
     public SearchDictionary {
         stopwords = nn(stopwords);
+        intentWords = nn(intentWords);
         protectedWordSuffixes = nn(protectedWordSuffixes);
         particleSuffixes = nn(particleSuffixes);
         seriesRequestTriggers = nn(seriesRequestTriggers);

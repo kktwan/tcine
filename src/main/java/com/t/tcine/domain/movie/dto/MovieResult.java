@@ -21,6 +21,11 @@ public record MovieResult(String summary, List<MovieCard> cards, boolean ai, Str
         return cards != null && !cards.isEmpty();
     }
 
+    @Override
+    public int cardCount() {
+        return cards == null ? 0 : cards.size();
+    }
+
     public record MovieCard(int id, String title, String originalTitle, Integer year, String genres,
                             Double rating, String overview, String posterUrl, String tmdbUrl, String reason,
                             String director, String cast, Integer runtime) implements RecommendCard {

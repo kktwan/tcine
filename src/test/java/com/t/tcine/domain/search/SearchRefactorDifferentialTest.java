@@ -62,7 +62,7 @@ class SearchRefactorDifferentialTest {
     void queryAnalysisMatchesLegacy() {
         for (String q : QUERIES) {
             String ctx = "query=[" + q + "]";
-            assertEquals(LegacyQueryAnalyzer.extractCoreTerms(q), analyzer.extractCoreTerms(q), ctx);
+            assertCoreTerms(q, ctx);
             assertEquals(LegacyQueryAnalyzer.normalizeOttSpacing(q), analyzer.normalizeOttSpacing(q), ctx);
             assertEquals(LegacyQueryAnalyzer.isSeriesRequest(q), analyzer.isSeriesRequest(q), ctx);
             assertEquals(LegacyQueryAnalyzer.similarTargetTitle(q), analyzer.similarTargetTitle(q), ctx);
@@ -92,7 +92,9 @@ class SearchRefactorDifferentialTest {
                 for (int i = 0; i < SAMPLES; i++) {
                     String ctx = "kind=" + kind + " query=[" + q + "] doc=" + i;
                     Document d = doc(i);
-                    assertEquals(LegacyRankingEngine.keywordScore(d, q, isTv), engine.keywordScore(d, q, kind), ctx + " keywordScore");
+                    if (sameCoreTerms(q)) {
+                        assertEquals(LegacyRankingEngine.keywordScore(d, q, isTv), engine.keywordScore(d, q, kind), ctx + " keywordScore");
+                    }
                     assertEquals(LegacyRankingEngine.matchesRequestedGenres(d, genres, isTv),
                             engine.matchesRequestedGenres(d, genres, kind), ctx + " matchesRequestedGenres");
                     assertEquals(LegacyRankingEngine.hasConflictingGenre(d, q, genres, isTv),
@@ -138,6 +140,8 @@ class SearchRefactorDifferentialTest {
             for (String q : QUERIES) {
                 // 시리즈에서 OTT 를 요청한 질의는 고유명사 보너스에서 OTT 를 뺐으므로(의도된 변경) 레거시와 순서가 다를 수 있다
                 if (kind.isTv() && !LegacyQueryAnalyzer.extractRequestedNetworks(q).isEmpty()) continue;
+                // 장르·시대 조건어를 핵심어에서 뺀 질의(의도된 변경)는 제목 일치 점수가 달라서 순서 비교에서 뺀다
+                if (!sameCoreTerms(q)) continue;
                 List<Document> kwOld = keywordHits();
                 List<Document> vecOld = vectorHits();
                 List<Document> kwNew = keywordHits();
@@ -154,6 +158,34 @@ class SearchRefactorDifferentialTest {
                 }
             }
         }
+    }
+
+    /** 레거시와 핵심어가 같은 질의인지 (장르·시대 조건어를 뺀 질의는 의도적으로 달라진다) */
+    private static boolean sameCoreTerms(String q) {
+        return LegacyQueryAnalyzer.extractCoreTerms(q).equals(analyzer.extractCoreTerms(q));
+    }
+
+    /**
+     * 핵심어는 레거시와 같거나, 장르·시대 조건어만 뺀 결과여야 한다
+     * (새 핵심어는 레거시 핵심어의 부분집합이고, 조건어만 있던 질의는 빈 목록이다).
+     */
+    private static void assertCoreTerms(String q, String ctx) {
+        List<String> legacy = LegacyQueryAnalyzer.extractCoreTerms(q);
+        List<String> now = analyzer.extractCoreTerms(q);
+        if (legacy.equals(now)) return;
+        assertTrue(legacy.containsAll(now), ctx + " 새 핵심어 " + now + " 는 레거시 " + legacy + " 의 부분집합이어야 함");
+        assertTrue(now.size() < legacy.size(), ctx + " 달라졌다면 조건어를 뺀 것이어야 함");
+    }
+
+    @Test
+    void intentWordsAreNotSearchTerms() {
+        assertEquals(List.of(), analyzer.extractCoreTerms("옛날 명작 영화"));
+        assertEquals(List.of(), analyzer.extractCoreTerms("로맨스 영화"));
+        assertEquals(List.of(), analyzer.extractCoreTerms("달달한 로맨스 영화 추천"));
+        assertEquals(List.of("기생충"), analyzer.extractCoreTerms("기생충 로맨스"));
+        // 실제 제목에 쓰이는 말은 그대로 검색어로 남는다
+        assertEquals(List.of("응답하라"), analyzer.extractCoreTerms("응답하라 시리즈"));
+        assertEquals(List.of("반지의제왕"), analyzer.extractCoreTerms("반지의제왕"));
     }
 
     // ───────────────────────── 샘플 데이터 ─────────────────────────

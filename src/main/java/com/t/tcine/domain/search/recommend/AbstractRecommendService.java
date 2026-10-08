@@ -204,8 +204,9 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
             return emptyResult(RecommendMessages.INTERRUPTED);
         }
 
-        log.info("{} 추천 소요: 검색(임베딩+Qdrant) {}ms, AI {}ms, 합계 {}ms", label,
-                searchedAt - started, System.currentTimeMillis() - searchedAt, System.currentTimeMillis() - started);
+        log.info("{} 추천 소요: 검색(임베딩+Qdrant) {}ms, AI {}ms, 합계 {}ms, 벡터1위 {}, 결과 {}편", label,
+                searchedAt - started, System.currentTimeMillis() - searchedAt, System.currentTimeMillis() - started,
+                String.format("%.3f", topVectorScore(docs)), result.cardCount());
         if (result.hasCards() && result.message() == null) cache.put(key, result, now);
         return result;
     }
@@ -315,6 +316,11 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
 
     /** 검색 단계 점수 분포: 벡터 유사도(내림차순), 키워드 일치 작품 수, 키워드 최고점, 기준 작품을 찾았는지 */
     public record RetrievalProbe(List<Double> vectorScores, int keywordMatches, int topKeywordScore, boolean referenceFound) {}
+
+    /** 합쳐진 후보 중 벡터 유사도 최고점 (관련도 하한을 정할 때 운영 로그에서 본다) */
+    private static double topVectorScore(List<Document> docs) {
+        return docs.stream().mapToDouble(d -> doubleOf(d.getMetadata().get("vector_score"))).max().orElse(0);
+    }
 
     /**
      * 검색어와 관련 있는 작품이 없다고 볼 수 있는지: 벡터 유사도 1위가 하한보다 낮고, 제목·인물이 맞은 작품도 없을 때.
@@ -447,7 +453,12 @@ public abstract class AbstractRecommendService<R extends Recommendation<C>, C ex
         // AI 가 하나도 고르지 못했어도 제목·인물이 정확히 맞은 후보는 보여 준다
         if (cards.isEmpty() && allowEntityCompletion) addEntityMatches(query, byId, cards, used);
 
-        // AI 의 summary 는 안내 문구가 아니라 코멘트이므로, 고른 작품이 없을 땐 쓰지 않고 정해 둔 안내를 보여 준다
+        // AI 가 정상 응답했지만 맞는 작품이 없다고 한 경우: 관련 없는 후보를 그대로 보여 주지 않고 솔직히 알린다
+        // (AI 의 summary 는 안내 문구가 아니라 코멘트이므로 쓰지 않는다)
+        boolean aiSaidNone = answer != null && (answer.picks() == null || answer.picks().isEmpty());
+        if (cards.isEmpty() && aiSaidNone) return emptyResult(messages.noRelevantResult());
+
+        // AI 응답이 비정상(고른 id 가 후보에 없는 경우 등)이면 검색 순서대로 보여 준다
         if (cards.isEmpty()) return fallback(query, byId, allowEntityCompletion, messages.aiPickedNothing());
         sortCards(cards, query, byId, allowEntityCompletion);
         return newResult(summary.isEmpty() ? null : summary, cards, true, null);

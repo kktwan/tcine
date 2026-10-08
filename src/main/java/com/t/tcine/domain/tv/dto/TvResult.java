@@ -21,6 +21,11 @@ public record TvResult(String summary, List<TvCard> cards, boolean ai, String me
         return cards != null && !cards.isEmpty();
     }
 
+    @Override
+    public int cardCount() {
+        return cards == null ? 0 : cards.size();
+    }
+
     public record TvCard(int id, String title, String originalTitle, Integer year, String genres,
                          Double rating, String overview, String posterUrl, String tmdbUrl, String reason,
                          String creator, String cast, String networks, Integer seasons, Integer episodes) implements RecommendCard {

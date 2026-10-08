@@ -5,5 +5,8 @@ public interface Recommendation<C extends RecommendCard> {
 
     boolean hasCards();
 
+    /** 결과 카드 수 */
+    int cardCount();
+
     String message();
 }
